@@ -1,0 +1,582 @@
+<script>
+  // Navegação das abas (sem reload).
+  document.getElementById('abas').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('button');
+    if (!btn) return;
+    var alvo = btn.dataset.aba;
+    document.querySelectorAll('#abas button').forEach(function (b) {
+      b.classList.toggle('ativo', b === btn);
+    });
+    document.querySelectorAll('.aba').forEach(function (s) {
+      s.classList.toggle('ativa', s.id === alvo);
+    });
+    if (alvo === 'relatorios') carregarRelatorios();
+  });
+
+  function brl(v) {
+    return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+  function escapar(s) {
+    return String(s == null ? '' : s).replace(/[&<>]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
+    });
+  }
+
+  function renderDashboard(d) {
+    if (!d) {
+      document.getElementById('cards').innerHTML =
+        '<span class="vazio">Não consegui carregar o resumo. Atualize a página (Ctrl+Shift+R).</span>';
+      return;
+    }
+    var t = d.totais || {};
+    document.getElementById('cards').innerHTML = [
+      ['Molduras', t.moldura || 0], ['Vidros', t.vidro || 0],
+      ['Chapas', t.chapa || 0], ['Espelhos', t.espelho || 0],
+      ['Valor do estoque', brl(d.valor_estoque)], ['Vendas registradas', d.num_movimentacoes_venda || 0]
+    ].map(function (c) {
+      return '<div class="card"><div class="rotulo">' + c[0] + '</div><div class="valor">' + c[1] + '</div></div>';
+    }).join('');
+
+    var baixo = d.estoque_baixo || [];
+    document.getElementById('estoque-baixo').innerHTML = baixo.length
+      ? '<table><thead><tr><th>Produto</th><th>Categoria</th><th>Estoque</th></tr></thead><tbody>' +
+        baixo.map(function (i) {
+          return '<tr><td>' + escapar(i.nome) + ' <span class="pill baixo">baixo</span></td><td>' +
+            escapar(i.categoria) + '</td><td>' + i.estoque + ' / ' + i.minimo + ' ' + escapar(i.unidade) + '</td></tr>';
+        }).join('') + '</tbody></table>'
+      : '<p class="vazio">Tudo acima do mínimo 👍</p>';
+
+    var ult = d.ultimas_movimentacoes || [];
+    document.getElementById('ultimas').innerHTML = ult.length
+      ? '<table><thead><tr><th>Quando</th><th>Tipo</th><th>Produto</th><th>Qtd</th><th>Valor</th></tr></thead><tbody>' +
+        ult.map(function (m) {
+          return '<tr><td>' + escapar(m.data_hora) + '</td><td>' + escapar(m.tipo) + '</td><td>' +
+            escapar(m.produto) + '</td><td>' + escapar(m.quantidade) + ' ' + escapar(m.unidade) +
+            '</td><td>' + (m.valor ? brl(m.valor) : '—') + '</td></tr>';
+        }).join('') + '</tbody></table>'
+      : '<p class="vazio">Sem movimentações ainda.</p>';
+  }
+
+  function carregarDashboard() {
+    google.script.run
+      .withSuccessHandler(renderDashboard)
+      .withFailureHandler(function (err) {
+        document.getElementById('cards').innerHTML =
+          '<span class="vazio">Erro ao carregar: ' + escapar(err && err.message) + '</span>';
+      })
+      .dashboardResumo();
+  }
+
+  var PRODUTOS = [];
+
+  function opcoes(itens, placeholder) {
+    var html = placeholder ? '<option value="">' + placeholder + '</option>' : '';
+    return html + itens.map(function (p) {
+      var rotulo = escapar(p.nome) + ' (' + p.codigo + ') · ' + p.estoque + p.unidade +
+                   ' · R$ ' + p.preco + '/' + p.unidade +
+                   (p.disponivel && p.estoque > 0 ? '' : ' ⚠️');
+      return '<option value="' + escapar(p.codigo) + '">' + rotulo + '</option>';
+    }).join('');
+  }
+
+  function filtrar(lista, query) {
+    var q = (query || '').toLowerCase().trim();
+    if (!q) return lista;
+    return lista.filter(function (p) {
+      return (p.nome + ' ' + p.codigo + ' ' + (p.modelo || '')).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  function preencherSelects() {
+    var por = function (cat) { return PRODUTOS.filter(function (p) { return p.categoria === cat; }); };
+    document.getElementById('q-moldura').innerHTML = opcoes(por('moldura'), '— escolha —');
+    document.getElementById('s-moldura').innerHTML = opcoes(por('moldura'), '— escolha —');
+    document.getElementById('q-vidro').innerHTML   = opcoes(por('vidro'),   '— sem vidro —');
+    document.getElementById('q-chapa').innerHTML   = opcoes(por('chapa'),   '— sem chapa —');
+    document.getElementById('q-espelho').innerHTML = opcoes(por('espelho'), '— sem espelho —');
+    document.getElementById('a-produto').innerHTML = opcoes(PRODUTOS, '— escolha —');
+    document.getElementById('e-produto').innerHTML = opcoes(PRODUTOS, '— escolha —');
+  }
+
+  function carregarProdutos() {
+    google.script.run
+      .withSuccessHandler(function (lista) { PRODUTOS = lista || []; preencherSelects(); renderConsulta(''); preencherSelectEditar(''); })
+      .withFailureHandler(function (err) { console.error('Erro ao carregar produtos:', err && err.message); })
+      .listarProdutos();
+  }
+
+  // Mostra um recado numa área (.msg) específica. À prova de null.
+  function mostrarMsg(texto, ok, elId) {
+    var el = elId ? document.getElementById(elId) : null;
+    if (!el) { if (!ok) console.error(texto); return; }
+    el.textContent = texto;
+    el.className = 'msg ' + (ok ? 'ok' : 'erro');
+  }
+
+  // Busca nos seletores (moldura, avulso, entrada)
+  document.getElementById('q-moldura-busca').addEventListener('input', function () {
+    var molduras = PRODUTOS.filter(function (p) { return p.categoria === 'moldura'; });
+    document.getElementById('q-moldura').innerHTML = opcoes(filtrar(molduras, this.value), '— escolha —');
+  });
+  document.getElementById('a-produto-busca').addEventListener('input', function () {
+    document.getElementById('a-produto').innerHTML = opcoes(filtrar(PRODUTOS, this.value), '— escolha —');
+  });
+  document.getElementById('s-moldura-busca').addEventListener('input', function () {
+    var molduras = PRODUTOS.filter(function (p) { return p.categoria === 'moldura'; });
+    document.getElementById('s-moldura').innerHTML = opcoes(filtrar(molduras, this.value), '— escolha —');
+  });
+  document.getElementById('e-produto-busca').addEventListener('input', function () {
+    document.getElementById('e-produto').innerHTML = opcoes(filtrar(PRODUTOS, this.value), '— escolha —');
+  });
+
+  // Registrar entrada de mercadoria
+  document.getElementById('form-entrada').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = this.querySelector('button[type=submit]');
+    btn.disabled = true; mostrarMsg('Registrando…', true, 'entrada-msg');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false;
+        mostrarMsg('Entrada registrada ✅ — ' + r.item + ': +' + r.quantidade + r.unidade +
+                   ' (saldo ' + r.novo_saldo + r.unidade + ').', true, 'entrada-msg');
+        document.getElementById('form-entrada').reset();
+        carregarDashboard(); carregarProdutos();
+      })
+      .withFailureHandler(function (err) { btn.disabled = false; mostrarMsg('Não deu: ' + (err && err.message), false, 'entrada-msg'); })
+      .registrarEntrada({
+        codigo: document.getElementById('e-produto').value,
+        quantidade: document.getElementById('e-qtd').value,
+        observacoes: document.getElementById('e-obs').value
+      });
+  });
+
+  // ---- Consulta ----
+  function renderConsulta(query) {
+    var itens = filtrar(PRODUTOS, query);
+    var el = document.getElementById('c-resultado');
+    if (!itens.length) { el.innerHTML = '<p class="vazio">Nada encontrado.</p>'; return; }
+    el.innerHTML = '<table><thead><tr><th>Produto</th><th>Cód.</th><th>Categoria</th><th>Estoque</th><th>Preço</th></tr></thead><tbody>' +
+      itens.map(function (p) {
+        var aviso = (p.disponivel && p.estoque > 0) ? '' : ' <span class="pill baixo">indisp.</span>';
+        return '<tr><td>' + escapar(p.nome) + (p.modelo ? ' · ' + escapar(p.modelo) : '') + aviso +
+          '</td><td>' + escapar(p.codigo) + '</td><td>' + escapar(p.categoria) +
+          '</td><td>' + p.estoque + p.unidade + '</td><td>' + brl(p.preco) + '/' + p.unidade + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  document.getElementById('c-busca').addEventListener('input', function () { renderConsulta(this.value); });
+
+  // ---- Simulador de viabilidade ----
+  function metros(v) {
+    return (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) + ' m';
+  }
+
+  document.getElementById('form-simulador').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = this.querySelector('button[type=submit]'); btn.disabled = true;
+    mostrarMsg('Simulando…', true, 'simulador-msg');
+    document.getElementById('s-resultado').innerHTML = '';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false;
+        var msg = document.getElementById('simulador-msg'); msg.textContent = ''; msg.className = 'msg';
+        renderSimulacao(r);
+      })
+      .withFailureHandler(function (err) { btn.disabled = false; mostrarMsg('Não deu: ' + (err && err.message), false, 'simulador-msg'); })
+      .simularServico(
+        document.getElementById('s-moldura').value,
+        document.getElementById('s-qtd').value,
+        document.getElementById('s-largura').value,
+        document.getElementById('s-altura').value
+      );
+  });
+
+  // Alterna os modos do simulador (Do catálogo / Manual) por classe — não usa [hidden].
+  document.getElementById('sim-modo').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('button'); if (!btn) return;
+    var alvo = btn.dataset.modo;
+    this.querySelectorAll('button').forEach(function (b) { b.classList.toggle('ativo', b === btn); });
+    document.querySelectorAll('#simulador .modo').forEach(function (m) {
+      m.classList.toggle('ativo', m.dataset.modo === alvo);
+    });
+    document.getElementById('s-resultado').innerHTML = '';
+    var msg = document.getElementById('simulador-msg'); msg.textContent = ''; msg.className = 'msg';
+  });
+
+  // Modo manual: perfil + estoque digitados (moldura fora do sistema).
+  document.getElementById('form-simulador-manual').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = this.querySelector('button[type=submit]'); btn.disabled = true;
+    mostrarMsg('Simulando…', true, 'simulador-msg');
+    document.getElementById('s-resultado').innerHTML = '';
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false;
+        var msg = document.getElementById('simulador-msg'); msg.textContent = ''; msg.className = 'msg';
+        renderSimulacao(r);
+      })
+      .withFailureHandler(function (err) { btn.disabled = false; mostrarMsg('Não deu: ' + (err && err.message), false, 'simulador-msg'); })
+      .simularServicoManual(
+        document.getElementById('sm-perfil').value,
+        document.getElementById('sm-qtd').value,
+        document.getElementById('sm-largura').value,
+        document.getElementById('sm-altura').value,
+        document.getElementById('sm-varas').value,
+        document.getElementById('sm-pedaco').value,
+        document.getElementById('sm-naodesenc').checked
+      );
+  });
+
+  function renderSimulacao(r) {
+    if (!r) { document.getElementById('s-resultado').innerHTML = '<p class="vazio">Não consegui simular.</p>'; return; }
+    var titulo = r.da
+      ? '<div class="veredito ok">✅ Dá pra fazer os ' + r.quantidade + ' quadros</div>'
+      : '<div class="veredito nao">❌ Não dá — faltam ' + metros(r.falta_m) +
+        (r.varas_comprar ? ' (≈ ' + r.varas_comprar + ' vara' + (r.varas_comprar > 1 ? 's' : '') + ' de 2,70 m)' : '') + '</div>';
+    var identificacao = r.manual
+      ? 'perfil ' + r.perfil_cm + ' cm (manual)'
+      : escapar(r.nome) + ' (' + escapar(r.codigo) + ')';
+    var linhas = [
+      ['Moldura', identificacao],
+      ['Consumo por quadro', metros(r.consumo_unitario_m)],
+      ['Necessário', metros(r.necessario_m) + ' (' + r.varas_necessarias + ' varas de 2,70 m)'],
+      [r.manual ? 'Disponível' : 'Em estoque', metros(r.estoque_m)],
+      [r.da ? 'Sobra' : 'Falta', r.da ? metros(r.sobra_m) : metros(r.falta_m)],
+      ['Máx. desse tamanho agora', r.max_quadros + ' quadros']
+    ];
+    var tab = '<table><tbody>' + linhas.map(function (l) {
+      return '<tr><th>' + l[0] + '</th><td>' + l[1] + '</td></tr>';
+    }).join('') + '</tbody></table>';
+    var aviso = r.sem_perfil
+      ? '<p class="vazio">⚠️ Sem a largura do perfil, o consumo foi estimado só pelo perímetro (não conta os cantos de 45°). ' +
+        (r.manual ? 'Preencha o perfil.' : 'Cadastre o perfil da moldura.') + '</p>'
+      : '';
+    document.getElementById('s-resultado').innerHTML = titulo + tab + aviso;
+  }
+
+  // ---- Venda quadro/espelho ----
+  function argsQuadro() {
+    return {
+      moldura: document.getElementById('q-moldura').value || undefined,
+      vidro: document.getElementById('q-vidro').value || undefined,
+      chapa: document.getElementById('q-chapa').value || undefined,
+      espelho: document.getElementById('q-espelho').value || undefined,
+      largura: document.getElementById('q-largura').value,
+      altura: document.getElementById('q-altura').value,
+      cliente: document.getElementById('q-cliente').value,
+      observacoes: document.getElementById('q-obs').value,
+      valorTotal: document.getElementById('q-total').value || undefined
+    };
+  }
+
+  document.getElementById('q-calcular').addEventListener('click', function () {
+    var prev = document.getElementById('q-preview');
+    prev.className = 'preview mostrar'; prev.textContent = 'Calculando…';
+    google.script.run
+      .withSuccessHandler(function (orc) {
+        var linhas = orc.itens.map(function (i) {
+          return '• ' + i.item + ': ' + brl(i.valor) + '  (' + i.calculo + ')';
+        }).join('\n');
+        prev.textContent = linhas + '\n\nTotal calculado: ' + brl(orc.valor_total);
+        document.getElementById('q-total').value = orc.valor_total;
+      })
+      .withFailureHandler(function (err) { prev.textContent = 'Erro: ' + (err && err.message); })
+      .orcamentoPorCodigos(argsQuadro());
+  });
+
+  document.getElementById('form-quadro').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = this.querySelector('button[type=submit]');
+    btn.disabled = true; mostrarMsg('Registrando…', true, 'venda-quadro-msg');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false;
+        mostrarMsg('Venda registrada ✅ — total ' + brl(r.valor_cobrado) +
+                   (r.ajustado ? ' (valor ajustado)' : '') + ', estoque baixado.', true, 'venda-quadro-msg');
+        document.getElementById('form-quadro').reset();
+        document.getElementById('q-preview').className = 'preview';
+        carregarDashboard(); carregarProdutos();
+      })
+      .withFailureHandler(function (err) { btn.disabled = false; mostrarMsg('Não deu: ' + (err && err.message), false, 'venda-quadro-msg'); })
+      .registrarVendaQuadro(argsQuadro());
+  });
+
+  // ---- Venda avulsa ----
+  document.getElementById('form-avulso').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = this.querySelector('button[type=submit]');
+    btn.disabled = true; mostrarMsg('Registrando…', true, 'venda-avulso-msg');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false;
+        mostrarMsg('Venda registrada ✅ — ' + r.item + ' ' + r.quantidade + r.unidade + ', ' + brl(r.valor) + '.', true, 'venda-avulso-msg');
+        document.getElementById('form-avulso').reset();
+        carregarDashboard(); carregarProdutos();
+      })
+      .withFailureHandler(function (err) { btn.disabled = false; mostrarMsg('Não deu: ' + (err && err.message), false, 'venda-avulso-msg'); })
+      .registrarVendaAvulsa({
+        codigo: document.getElementById('a-produto').value,
+        quantidade: document.getElementById('a-qtd').value,
+        cliente: document.getElementById('a-cliente').value,
+        observacoes: document.getElementById('a-obs').value
+      });
+  });
+
+  // ---- Produtos (cadastrar + editar) ----
+  var CAMPOS_PRODUTO = {
+    moldura: [
+      { k: 'Nome', l: 'Nome', t: 'text', req: true },
+      { k: 'Modelo', l: 'Modelo', t: 'text' },
+      { k: 'Estilo', l: 'Estilo', t: 'select', op: ['classica', 'moderna', 'rustica', 'minimalista'] },
+      { k: 'Cor', l: 'Cor', t: 'select', op: ['dourado', 'prata', 'preto', 'branco', 'madeira', 'rose'] },
+      { k: 'Acabamento', l: 'Acabamento', t: 'text' },
+      { k: 'Largura_perfil_cm', l: 'Largura do perfil (cm)', t: 'number' },
+      { k: 'Valor_por_metro', l: 'Valor por metro (R$)', t: 'number', req: true },
+      { k: 'Custo_por_metro', l: 'Custo por metro (R$)', t: 'number' },
+      { k: 'Estoque_atual_m', l: 'Estoque atual (m)', t: 'number' },
+      { k: 'Estoque_minimo_m', l: 'Estoque mínimo (m)', t: 'number' },
+      { k: 'Foto_URL', l: 'Foto (URL)', t: 'text' },
+      { k: 'Descricao', l: 'Descrição', t: 'text' },
+      { k: 'Tags', l: 'Tags (separadas por vírgula)', t: 'text' },
+      { k: 'Disponivel', l: 'Disponível?', t: 'select', op: ['sim', 'nao'] }
+    ],
+    material: [
+      { k: 'Nome', l: 'Nome', t: 'text', req: true },
+      { k: 'Tipo', l: 'Tipo', t: 'text' },
+      { k: 'Espessura_mm', l: 'Espessura (mm)', t: 'number' },
+      { k: 'Valor_por_m2', l: 'Valor por m² (R$)', t: 'number', req: true },
+      { k: 'Custo_por_m2', l: 'Custo por m² (R$)', t: 'number' },
+      { k: 'Estoque_atual_m2', l: 'Estoque atual (m²)', t: 'number' },
+      { k: 'Estoque_minimo_m2', l: 'Estoque mínimo (m²)', t: 'number' },
+      { k: 'Descricao', l: 'Descrição', t: 'text' },
+      { k: 'Disponivel', l: 'Disponível?', t: 'select', op: ['sim', 'nao'] }
+    ]
+  };
+
+  function camposDaCategoria(cat) { return cat === 'moldura' ? CAMPOS_PRODUTO.moldura : CAMPOS_PRODUTO.material; }
+
+  function escaparAttr(v) {
+    return String(v == null ? '' : v).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+  function normalizarValor(k, v) {
+    if (k === 'Disponivel') return (v === false || v === 'FALSE' || v === 'nao' || v === 0) ? 'nao' : 'sim';
+    return v;
+  }
+
+  // Espelha estoqueManualM/desencabecoM (Calculo.gs): varas×2,70 + pedaço − desencabeço do pedaço
+  // (se a ponta não foi aberta). Desencabeço = √2×perfil + kerf (2mm) — escala com o perfil.
+  function metrosDeVaras(varas, pedaco, perfilCm, naoDesenc) {
+    var v = Number(varas) || 0, ped = Number(pedaco) || 0, p = Number(perfilCm) || 0;
+    var disp = v * 2.70 + ped;
+    if (naoDesenc && ped > 0) disp -= (p > 0 ? Math.SQRT2 * p / 100 : 0) + 0.002;
+    return Math.max(0, Number(disp.toFixed(3)));
+  }
+
+  // Widget de estoque inicial de moldura por varas (só no cadastrar). Vira Estoque_atual_m.
+  function widgetEstoqueVaras() {
+    return '<div class="estoque-varas" data-estoque-varas>' +
+      '<span class="ev-titulo">Estoque inicial (por varas)</span>' +
+      '<div class="lin2">' +
+        '<label>Varas inteiras (2,70 m) <input data-ev="varas" type="number" min="0" step="1" value="0"></label>' +
+        '<label>Pedaço solto (m) <input data-ev="pedaco" type="number" min="0" step="0.01" value="0"></label>' +
+      '</div>' +
+      '<label class="check"><input data-ev="naodesenc" type="checkbox"> Esse pedaço ainda não está desencabeçado (desconta a ponta)</label>' +
+      '<span class="ev-preview" data-ev-preview>= 0,00 m em estoque</span>' +
+    '</div>';
+  }
+
+  // Renderiza os campos da categoria num container. `valores` prefilla (edição); `excluir` esconde colunas.
+  // modo='novo' + moldura: o estoque atual vira o widget de varas (entrada por varas).
+  function renderCampos(containerId, categoria, valores, excluir, modo) {
+    valores = valores || {}; excluir = excluir || [];
+    document.getElementById(containerId).innerHTML = camposDaCategoria(categoria)
+      .filter(function (f) { return excluir.indexOf(f.k) < 0; })
+      .map(function (f) {
+        if (modo === 'novo' && categoria === 'moldura' && f.k === 'Estoque_atual_m') {
+          return widgetEstoqueVaras();
+        }
+        var v = normalizarValor(f.k, valores[f.k]);
+        var input;
+        if (f.t === 'select') {
+          input = '<select data-k="' + f.k + '"><option value="">—</option>' +
+            f.op.map(function (o) { return '<option value="' + o + '"' + (String(v) === o ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select>';
+        } else {
+          var val = (v === undefined || v === null) ? '' : v;
+          input = '<input data-k="' + f.k + '" type="' + f.t + '"' +
+            (f.t === 'number' ? ' step="0.01" min="0"' : '') + (f.req ? ' required' : '') + ' value="' + escaparAttr(val) + '">';
+        }
+        return '<label>' + f.l + (f.req ? ' *' : '') + ' ' + input + '</label>';
+      }).join('');
+  }
+
+  function coletarCampos(containerId) {
+    var campos = {};
+    document.querySelectorAll('#' + containerId + ' [data-k]').forEach(function (el) {
+      campos[el.dataset.k] = (el.type === 'number' && el.value !== '') ? Number(el.value) : el.value;
+    });
+    var ev = document.querySelector('#' + containerId + ' [data-estoque-varas]');
+    if (ev) {
+      campos['Estoque_atual_m'] = metrosDeVaras(
+        ev.querySelector('[data-ev=varas]').value,
+        ev.querySelector('[data-ev=pedaco]').value,
+        campos['Largura_perfil_cm'],
+        ev.querySelector('[data-ev=naodesenc]').checked
+      );
+    }
+    return campos;
+  }
+
+  // Cadastrar
+  document.getElementById('p-categoria').addEventListener('change', function () {
+    renderCampos('p-campos-novo', this.value, {}, [], 'novo');
+  });
+
+  // Preview do estoque por varas (cadastrar moldura) — recalcula ao mexer em varas/pedaço/perfil.
+  function atualizarPreviewVaras() {
+    var ev = document.querySelector('#p-campos-novo [data-estoque-varas]');
+    if (!ev) return;
+    var perfilEl = document.querySelector('#p-campos-novo [data-k=Largura_perfil_cm]');
+    var m = metrosDeVaras(
+      ev.querySelector('[data-ev=varas]').value,
+      ev.querySelector('[data-ev=pedaco]').value,
+      perfilEl ? perfilEl.value : 0,
+      ev.querySelector('[data-ev=naodesenc]').checked
+    );
+    ev.querySelector('[data-ev-preview]').textContent =
+      '= ' + m.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 3 }) + ' m em estoque';
+  }
+  document.getElementById('form-produto-novo').addEventListener('input', atualizarPreviewVaras);
+  document.getElementById('form-produto-novo').addEventListener('change', atualizarPreviewVaras);
+  document.getElementById('form-produto-novo').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = this.querySelector('button[type=submit]'); btn.disabled = true; mostrarMsg('Cadastrando…', true, 'cadastrar-msg');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false;
+        mostrarMsg('Produto cadastrado ✅ — ' + r.nome + ' (' + r.codigo + ').', true, 'cadastrar-msg');
+        document.getElementById('form-produto-novo').reset();
+        renderCampos('p-campos-novo', document.getElementById('p-categoria').value, {}, [], 'novo');
+        carregarProdutos();
+      })
+      .withFailureHandler(function (err) { btn.disabled = false; mostrarMsg('Não deu: ' + (err && err.message), false, 'cadastrar-msg'); })
+      .adicionarProduto({ categoria: document.getElementById('p-categoria').value, campos: coletarCampos('p-campos-novo') });
+  });
+
+  // Editar
+  function preencherSelectEditar(query) {
+    document.getElementById('p-edit-select').innerHTML = opcoes(filtrar(PRODUTOS, query || ''), '— escolha —');
+  }
+  document.getElementById('p-edit-busca').addEventListener('input', function () { preencherSelectEditar(this.value); });
+  document.getElementById('p-edit-select').addEventListener('change', function () {
+    var cod = this.value;
+    var alvo = document.getElementById('p-campos-editar');
+    if (!cod) { alvo.innerHTML = ''; return; }
+    alvo.innerHTML = '<p class="carregando">Carregando…</p>';
+    google.script.run
+      .withSuccessHandler(function (p) {
+        if (!p) { alvo.innerHTML = '<p class="vazio">Não encontrado.</p>'; return; }
+        renderCampos('p-campos-editar', p.categoria, p.campos, []);
+      })
+      .withFailureHandler(function (err) { mostrarMsg('Erro ao carregar: ' + (err && err.message), false, 'editar-msg'); })
+      .obterProduto(cod);
+  });
+  document.getElementById('form-produto-editar').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var cod = document.getElementById('p-edit-select').value;
+    if (!cod) { mostrarMsg('Escolha um produto.', false, 'editar-msg'); return; }
+    var btn = this.querySelector('button[type=submit]'); btn.disabled = true; mostrarMsg('Salvando…', true, 'editar-msg');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false;
+        mostrarMsg('Alterações salvas ✅ (' + r.alterou.length + ' campo(s)).', true, 'editar-msg');
+        carregarProdutos(); carregarDashboard();
+      })
+      .withFailureHandler(function (err) { btn.disabled = false; mostrarMsg('Não deu: ' + (err && err.message), false, 'editar-msg'); })
+      .editarProduto({ codigo: cod, campos: coletarCampos('p-campos-editar') });
+  });
+
+  renderCampos('p-campos-novo', 'moldura', {}, [], 'novo');
+
+  // ---- Relatórios ----
+  var GRAFICOS_PRONTOS = false, RELATORIO_PERIODO = 'mes', RELATORIO_PENDENTE = null;
+  google.charts.load('current', { packages: ['corechart'] });
+  google.charts.setOnLoadCallback(function () {
+    GRAFICOS_PRONTOS = true;
+    if (RELATORIO_PENDENTE) { desenharGraficos(RELATORIO_PENDENTE); RELATORIO_PENDENTE = null; }
+  });
+
+  document.getElementById('rel-periodos').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('button'); if (!btn) return;
+    this.querySelectorAll('button').forEach(function (b) { b.classList.toggle('ativo', b === btn); });
+    carregarRelatorios(btn.dataset.periodo);
+  });
+
+  function carregarRelatorios(periodo) {
+    RELATORIO_PERIODO = periodo || RELATORIO_PERIODO;
+    document.getElementById('rel-kpis').innerHTML = '<span class="carregando">Carregando…</span>';
+    google.script.run
+      .withSuccessHandler(renderRelatorios)
+      .withFailureHandler(function (err) {
+        document.getElementById('rel-kpis').innerHTML = '<span class="vazio">Erro: ' + escapar(err && err.message) + '</span>';
+      })
+      .relatorios(RELATORIO_PERIODO);
+  }
+
+  function renderRelatorios(d) {
+    if (!d) { document.getElementById('rel-kpis').innerHTML = '<span class="vazio">Não consegui carregar.</span>'; return; }
+    var lucro = (d.lucro && d.lucro.tem_custo)
+      ? brl(d.lucro.valor) + (d.lucro.itens_sem_custo ? ' <span class="pill baixo">' + d.lucro.itens_sem_custo + ' s/ custo</span>' : '')
+      : '<span class="vazio">aguardando custos</span>';
+    document.getElementById('rel-kpis').innerHTML = [
+      ['Faturamento', brl(d.faturamento)],
+      ['Vendas', d.num_vendas || 0],
+      ['Ticket médio', brl(d.ticket_medio)],
+      ['Lucro líquido', lucro]
+    ].map(function (c) {
+      return '<div class="card"><div class="rotulo">' + c[0] + '</div><div class="valor">' + c[1] + '</div></div>';
+    }).join('');
+
+    var rk = d.ranking_molduras || [];
+    document.getElementById('rel-ranking').innerHTML = rk.length
+      ? '<table><thead><tr><th>#</th><th>Moldura</th><th>Metros</th><th>Valor</th></tr></thead><tbody>' +
+        rk.map(function (m, i) {
+          return '<tr><td>' + (i + 1) + '</td><td>' + escapar(m.nome) + '</td><td>' + m.metros + ' m</td><td>' + brl(m.valor) + '</td></tr>';
+        }).join('') + '</tbody></table>'
+      : '<p class="vazio">Sem vendas de moldura no período.</p>';
+
+    if (GRAFICOS_PRONTOS) desenharGraficos(d); else RELATORIO_PENDENTE = d;
+  }
+
+  function desenharGraficos(d) {
+    var serie = d.serie_tempo || [];
+    var elT = document.getElementById('rel-tempo');
+    if (!serie.length) { elT.innerHTML = '<p class="vazio">Sem vendas no período.</p>'; }
+    else {
+      var dt = new google.visualization.DataTable();
+      dt.addColumn('string', 'Quando'); dt.addColumn('number', 'Faturamento');
+      serie.forEach(function (p) { dt.addRow([p.rotulo, p.valor]); });
+      new google.visualization.LineChart(elT).draw(dt, {
+        legend: 'none', height: 220, colors: ['#7c3aed'],
+        chartArea: { width: '82%', height: '72%' }, pointSize: 4
+      });
+    }
+
+    var cat = d.por_categoria || [];
+    var elC = document.getElementById('rel-categoria');
+    if (!cat.length) { elC.innerHTML = '<p class="vazio">Sem vendas no período.</p>'; }
+    else {
+      var dc = new google.visualization.DataTable();
+      dc.addColumn('string', 'Categoria'); dc.addColumn('number', 'Valor');
+      cat.forEach(function (c) { dc.addRow([c.categoria, c.valor]); });
+      new google.visualization.PieChart(elC).draw(dc, {
+        height: 220, chartArea: { width: '92%', height: '82%' },
+        colors: ['#7c3aed', '#a78bfa', '#c4b5fd', '#ddd6fe']
+      });
+    }
+  }
+
+  carregarDashboard();
+  carregarProdutos();
+</script>

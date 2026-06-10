@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <header>
+    <h1>Vera Molduras e Decoração</h1>
+    <p>Controle de estoque</p>
+  </header>
+
+  <nav id="abas">
+    <button class="ativo" data-aba="dashboard">Início</button>
+    <button data-aba="relatorios">Relatórios</button>
+    <button data-aba="simulador">Simulador</button>
+    <button data-aba="venda-quadro">Venda quadro</button>
+    <button data-aba="venda-avulso">Venda avulsa</button>
+    <button data-aba="entrada">Entrada</button>
+    <button data-aba="consulta">Consulta</button>
+    <button data-aba="cadastrar">Cadastrar</button>
+    <button data-aba="editar">Editar</button>
+  </nav>
+
+  <main>
+    <section id="dashboard" class="aba ativa">
+      <div class="cards" id="cards"><span class="carregando">Carregando…</span></div>
+      <h2>Estoque baixo</h2>
+      <div id="estoque-baixo"></div>
+      <h2>Últimas movimentações</h2>
+      <div id="ultimas"></div>
+    </section>
+
+    <section id="relatorios" class="aba">
+      <div class="periodos" id="rel-periodos">
+        <button data-periodo="hoje">Hoje</button>
+        <button data-periodo="semana">Semana</button>
+        <button class="ativo" data-periodo="mes">Mês</button>
+        <button data-periodo="tudo">Tudo</button>
+      </div>
+      <div class="cards" id="rel-kpis"><span class="carregando">Carregando…</span></div>
+      <h2>Faturamento no tempo</h2>
+      <div id="rel-tempo" class="grafico"></div>
+      <div class="rel-grid2">
+        <div>
+          <h2>Por categoria</h2>
+          <div id="rel-categoria" class="grafico"></div>
+        </div>
+        <div>
+          <h2>Molduras mais vendidas</h2>
+          <div id="rel-ranking"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="simulador" class="aba">
+      <div class="toggle" id="sim-modo">
+        <button type="button" class="ativo" data-modo="catalogo">Do catálogo</button>
+        <button type="button" data-modo="manual">Manual</button>
+      </div>
+
+      <div class="modo ativo" data-modo="catalogo">
+        <form id="form-simulador" class="form">
+          <label>Moldura
+            <input id="s-moldura-busca" type="text" placeholder="buscar por nome ou código…" autocomplete="off">
+            <select id="s-moldura" required></select>
+          </label>
+          <label>Quantidade de quadros <input id="s-qtd" type="number" min="1" step="1" required></label>
+          <div class="lin2">
+            <label>Largura (cm) <input id="s-largura" type="number" min="1" step="0.1" required></label>
+            <label>Altura (cm) <input id="s-altura" type="number" min="1" step="0.1" required></label>
+          </div>
+          <div class="acoes"><button type="submit" class="primario">Simular</button></div>
+        </form>
+      </div>
+
+      <div class="modo" data-modo="manual">
+        <form id="form-simulador-manual" class="form">
+          <label>Largura do perfil (cm) <input id="sm-perfil" type="number" min="0.1" step="0.1" required></label>
+          <label>Quantidade de quadros <input id="sm-qtd" type="number" min="1" step="1" required></label>
+          <div class="lin2">
+            <label>Largura (cm) <input id="sm-largura" type="number" min="1" step="0.1" required></label>
+            <label>Altura (cm) <input id="sm-altura" type="number" min="1" step="0.1" required></label>
+          </div>
+          <div class="lin2">
+            <label>Varas inteiras (2,70 m) <input id="sm-varas" type="number" min="0" step="1" value="0"></label>
+            <label>Pedaço solto (m) <input id="sm-pedaco" type="number" min="0" step="0.01" value="0"></label>
+          </div>
+          <label class="check"><input id="sm-naodesenc" type="checkbox"> Esse pedaço ainda não está desencabeçado (desconta a ponta)</label>
+          <div class="acoes"><button type="submit" class="primario">Simular</button></div>
+        </form>
+      </div>
+
+      <div id="s-resultado"></div>
+      <div id="simulador-msg" class="msg"></div>
+    </section>
+
+    <section id="venda-quadro" class="aba">
+      <form id="form-quadro" class="form">
+        <label>Moldura
+          <input id="q-moldura-busca" type="text" placeholder="buscar por nome ou código…" autocomplete="off">
+          <select id="q-moldura" required></select>
+        </label>
+        <label>Vidro (opcional) <select id="q-vidro"></select></label>
+        <label>Chapa / fundo (opcional) <select id="q-chapa"></select></label>
+        <label>Espelho (opcional) <select id="q-espelho"></select></label>
+        <div class="lin2">
+          <label>Largura (cm) <input id="q-largura" type="number" min="1" step="0.1" required></label>
+          <label>Altura (cm) <input id="q-altura" type="number" min="1" step="0.1" required></label>
+        </div>
+        <label>Cliente <input id="q-cliente" type="text" placeholder="opcional"></label>
+        <label>Observações <input id="q-obs" type="text" placeholder="opcional"></label>
+        <label>Valor total (R$) <input id="q-total" type="number" min="0" step="0.01" placeholder="clique em Calcular — pode ajustar"></label>
+        <div class="acoes">
+          <button type="button" id="q-calcular" class="secundario">Calcular</button>
+          <button type="submit" class="primario">Confirmar venda</button>
+        </div>
+        <div id="q-preview" class="preview"></div>
+      </form>
+      <div id="venda-quadro-msg" class="msg"></div>
+    </section>
+
+    <section id="venda-avulso" class="aba">
+      <form id="form-avulso" class="form">
+        <label>Produto
+          <input id="a-produto-busca" type="text" placeholder="buscar por nome ou código…" autocomplete="off">
+          <select id="a-produto" required></select>
+        </label>
+        <label>Quantidade <input id="a-qtd" type="number" min="0.01" step="0.01" required></label>
+        <label>Cliente <input id="a-cliente" type="text" placeholder="opcional"></label>
+        <label>Observações <input id="a-obs" type="text" placeholder="opcional"></label>
+        <div class="acoes"><button type="submit" class="primario">Confirmar venda</button></div>
+      </form>
+      <div id="venda-avulso-msg" class="msg"></div>
+    </section>
+
+    <section id="entrada" class="aba">
+      <form id="form-entrada" class="form">
+        <label>Produto
+          <input id="e-produto-busca" type="text" placeholder="buscar por nome ou código…" autocomplete="off">
+          <select id="e-produto" required></select>
+        </label>
+        <label>Quantidade recebida <input id="e-qtd" type="number" min="0.01" step="0.01" required></label>
+        <label>Observações <input id="e-obs" type="text" placeholder="opcional (ex: nota fiscal)"></label>
+        <div class="acoes"><button type="submit" class="primario">Registrar entrada</button></div>
+      </form>
+      <div id="entrada-msg" class="msg"></div>
+    </section>
+
+    <section id="consulta" class="aba">
+      <div class="form">
+        <label>Buscar <input id="c-busca" type="text" placeholder="nome, código ou modelo…" autocomplete="off"></label>
+      </div>
+      <div id="c-resultado"></div>
+    </section>
+
+    <section id="cadastrar" class="aba">
+      <form id="form-produto-novo" class="form">
+        <label>Categoria
+          <select id="p-categoria">
+            <option value="moldura">Moldura</option>
+            <option value="vidro">Vidro</option>
+            <option value="chapa">Chapa</option>
+            <option value="espelho">Espelho</option>
+          </select>
+        </label>
+        <div id="p-campos-novo"></div>
+        <div class="acoes"><button type="submit" class="primario">Cadastrar produto</button></div>
+      </form>
+      <div id="cadastrar-msg" class="msg"></div>
+    </section>
+
+    <section id="editar" class="aba">
+      <form id="form-produto-editar" class="form">
+        <label>Produto a editar
+          <input id="p-edit-busca" type="text" placeholder="buscar por nome ou código…" autocomplete="off">
+          <select id="p-edit-select"></select>
+        </label>
+        <div id="p-campos-editar"></div>
+        <div class="acoes"><button type="submit" class="primario">Salvar alterações</button></div>
+      </form>
+      <div id="editar-msg" class="msg"></div>
+    </section>
+  </main>
+
+  <script src="https://www.gstatic.com/charts/loader.js"></script>
+  <?!= include('JavaScript'); ?>
+</body>
+</html>
