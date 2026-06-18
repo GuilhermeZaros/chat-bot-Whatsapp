@@ -11,6 +11,11 @@ function _aba(nome) {
   return aba;
 }
 
+// Existe a aba? Pra tabelas OPCIONAIS (ex.: Avulsos) que podem ainda não ter sido criadas.
+function abaExiste(nome) {
+  return !!_planilha().getSheetByName(nome);
+}
+
 // Lê a aba inteira como array de objetos { Coluna: valor, _linha: n }.
 function lerAba(nome) {
   var aba = _aba(nome);

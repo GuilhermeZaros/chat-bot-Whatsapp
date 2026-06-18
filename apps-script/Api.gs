@@ -5,6 +5,8 @@
 function doGet(e) {
   var action = e && e.parameter ? e.parameter.action : null;
   if (!action) {
+    // Interface humana: serve sempre. Quem tranca é a tela de login + a validação de
+    // sessão no servidor — não o e-mail Google. O bot nunca cai aqui (usa ?action=).
     return HtmlService.createTemplateFromFile('Index').evaluate()
       .setTitle('Vera Molduras — Estoque')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1');

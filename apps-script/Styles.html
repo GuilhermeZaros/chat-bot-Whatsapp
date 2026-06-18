@@ -69,4 +69,27 @@
   .estoque-varas { border:1px solid var(--line); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:10px; }
   .estoque-varas .ev-titulo { font-size:13px; color:var(--muted); }
   .estoque-varas .ev-preview { font-size:13px; font-weight:600; color:var(--brand); }
+  .dica { color:var(--muted); font-size:13px; margin:0 0 12px; }
+  .fin-filtros { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .fin-filtros label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); }
+  .fin-filtros select { padding:9px 10px; border:1px solid var(--line); border-radius:10px;
+                        font-size:14px; background:#fff; color:var(--ink); }
+  #tela-login { display:none; min-height:100vh; align-items:center; justify-content:center; padding:24px; }
+  body:not(.logado) #tela-login { display:flex; }
+  body:not(.logado) #app-conteudo { display:none; }
+  .login-box { background:var(--card); border:1px solid var(--line); border-radius:16px;
+               padding:28px 24px; max-width:360px; width:100%; box-shadow:0 4px 20px rgba(0,0,0,.06); }
+  .login-box h1 { color:var(--brand); font-size:20px; margin:0 0 4px; }
+  .login-sub { color:var(--muted); font-size:13px; margin:0 0 18px; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  #btn-sair { background:rgba(255,255,255,.2); color:#fff; border:0; padding:8px 14px;
+              border-radius:8px; font-size:13px; cursor:pointer; white-space:nowrap; }
+  .card .delta { font-size:12px; margin-top:6px; font-weight:600; }
+  .card .delta.bom { color:var(--ok); }
+  .card .delta.ruim { color:var(--warn); }
+  .card .delta.igual { color:var(--muted); }
+  .insights-box ul.insights { margin:12px 0 18px; padding-left:18px; }
+  .insights-box ul.insights li { font-size:14px; color:var(--ink); margin:6px 0; }
+  .lanc-ent { color:var(--ok); font-weight:600; }
+  .lanc-sai { color:var(--warn); font-weight:600; }
 </style>

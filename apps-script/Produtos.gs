@@ -1,6 +1,6 @@
 // Produtos.gs — cadastro de produtos (escrita). _proximoCodigo é puro (testável em Node).
 
-var _PREFIXO_CAT = { moldura: 'MOL', vidro: 'VID', chapa: 'CHA', espelho: 'ESP' };
+var _PREFIXO_CAT = { moldura: 'MOL', vidro: 'VID', chapa: 'CHA', espelho: 'ESP', avulso: 'AVU' };
 
 // Próximo código sequencial da categoria: pega o MAIOR número existente com o prefixo e soma 1.
 function _proximoCodigo(prefixo, codigosExistentes) {
@@ -15,6 +15,7 @@ function _proximoCodigo(prefixo, codigosExistentes) {
 // Cadastra um produto novo. args: { categoria, campos: { <Coluna>: valor, ... } }
 // Gera o código, grava na aba e registra 'cadastro' no histórico.
 function adicionarProduto(args) {
+  _validarSessao(args.token);
   var categoria = args.categoria;
   var aba = ABA_POR_CATEGORIA[categoria];
   var prefixo = _PREFIXO_CAT[categoria];
@@ -65,6 +66,7 @@ function obterProduto(codigo) {
 // Edita um produto. args: { codigo, campos: { <Coluna>: valor } }.
 // Atualiza só colunas reais; NÃO mexe em Codigo nem no estoque atual (muda por venda/entrada).
 function editarProduto(args) {
+  _validarSessao(args.token);
   var campos = args.campos || {};
   return comLock(function () {
     var p = buscarProduto(args.codigo);

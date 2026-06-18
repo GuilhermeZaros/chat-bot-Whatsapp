@@ -11,6 +11,7 @@
       s.classList.toggle('ativa', s.id === alvo);
     });
     if (alvo === 'relatorios') carregarRelatorios();
+    if (alvo === 'financeiro') carregarFinanceiro();
   });
 
   function brl(v) {
@@ -21,6 +22,66 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c];
     });
   }
+
+  // ---- Login / sessão ----
+  var TOKEN = localStorage.getItem('vera_token') || '';
+  var NOME = localStorage.getItem('vera_nome') || '';
+  var APP_INICIADO = false;
+
+  function mostrarLogin() {
+    document.body.classList.remove('logado');
+    var s = document.getElementById('login-senha'); if (s) s.value = '';
+  }
+  function entrarNoApp() {
+    document.body.classList.add('logado');
+    var elNome = document.getElementById('usuario-nome');
+    if (elNome) elNome.textContent = NOME ? ('Olá, ' + NOME) : '';
+    iniciarApp();
+  }
+  function iniciarApp() {
+    if (APP_INICIADO) return;
+    APP_INICIADO = true;
+    carregarDashboard();
+    carregarProdutos();
+    carregarFinanceiroConfig();
+  }
+  function sairLocal() {
+    TOKEN = ''; NOME = '';
+    localStorage.removeItem('vera_token');
+    localStorage.removeItem('vera_nome');
+    mostrarLogin();
+  }
+  function erroEhSessao(err) {
+    return err && /sess[aã]o|acesso restrito/i.test(String(err.message || ''));
+  }
+
+  document.getElementById('form-login').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = this.querySelector('button[type=submit]'); btn.disabled = true;
+    mostrarMsg('Entrando…', true, 'login-msg');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false;
+        if (r && r.ok) {
+          TOKEN = r.token; NOME = r.nome || '';
+          localStorage.setItem('vera_token', TOKEN);
+          localStorage.setItem('vera_nome', NOME);
+          document.getElementById('login-msg').className = 'msg';
+          entrarNoApp();
+        } else {
+          mostrarMsg((r && r.erro) || 'Não foi possível entrar.', false, 'login-msg');
+        }
+      })
+      .withFailureHandler(function (err) {
+        btn.disabled = false; mostrarMsg('Não deu: ' + (err && err.message), false, 'login-msg');
+      })
+      .autenticar(document.getElementById('login-email').value, document.getElementById('login-senha').value);
+  });
+
+  document.getElementById('btn-sair').addEventListener('click', function () {
+    if (TOKEN) google.script.run.sair(TOKEN);
+    sairLocal();
+  });
 
   function renderDashboard(d) {
     if (!d) {
@@ -83,7 +144,7 @@
     var q = (query || '').toLowerCase().trim();
     if (!q) return lista;
     return lista.filter(function (p) {
-      return (p.nome + ' ' + p.codigo + ' ' + (p.modelo || '')).toLowerCase().indexOf(q) >= 0;
+      return (p.nome + ' ' + p.codigo + ' ' + (p.marca || '')).toLowerCase().indexOf(q) >= 0;
     });
   }
 
@@ -144,6 +205,7 @@
       })
       .withFailureHandler(function (err) { btn.disabled = false; mostrarMsg('Não deu: ' + (err && err.message), false, 'entrada-msg'); })
       .registrarEntrada({
+        token: TOKEN,
         codigo: document.getElementById('e-produto').value,
         quantidade: document.getElementById('e-qtd').value,
         observacoes: document.getElementById('e-obs').value
@@ -158,7 +220,7 @@
     el.innerHTML = '<table><thead><tr><th>Produto</th><th>Cód.</th><th>Categoria</th><th>Estoque</th><th>Preço</th></tr></thead><tbody>' +
       itens.map(function (p) {
         var aviso = (p.disponivel && p.estoque > 0) ? '' : ' <span class="pill baixo">indisp.</span>';
-        return '<tr><td>' + escapar(p.nome) + (p.modelo ? ' · ' + escapar(p.modelo) : '') + aviso +
+        return '<tr><td>' + escapar(p.nome) + (p.marca ? ' · ' + escapar(p.marca) : '') + aviso +
           '</td><td>' + escapar(p.codigo) + '</td><td>' + escapar(p.categoria) +
           '</td><td>' + p.estoque + p.unidade + '</td><td>' + brl(p.preco) + '/' + p.unidade + '</td></tr>';
       }).join('') + '</tbody></table>';
@@ -257,6 +319,7 @@
   // ---- Venda quadro/espelho ----
   function argsQuadro() {
     return {
+      token: TOKEN,
       moldura: document.getElementById('q-moldura').value || undefined,
       vidro: document.getElementById('q-vidro').value || undefined,
       chapa: document.getElementById('q-chapa').value || undefined,
@@ -315,6 +378,7 @@
       })
       .withFailureHandler(function (err) { btn.disabled = false; mostrarMsg('Não deu: ' + (err && err.message), false, 'venda-avulso-msg'); })
       .registrarVendaAvulsa({
+        token: TOKEN,
         codigo: document.getElementById('a-produto').value,
         quantidade: document.getElementById('a-qtd').value,
         cliente: document.getElementById('a-cliente').value,
@@ -326,7 +390,7 @@
   var CAMPOS_PRODUTO = {
     moldura: [
       { k: 'Nome', l: 'Nome', t: 'text', req: true },
-      { k: 'Modelo', l: 'Modelo', t: 'text' },
+      { k: 'Marca', l: 'Marca (fornecedor)', t: 'text' },
       { k: 'Estilo', l: 'Estilo', t: 'select', op: ['classica', 'moderna', 'rustica', 'minimalista'] },
       { k: 'Cor', l: 'Cor', t: 'select', op: ['dourado', 'prata', 'preto', 'branco', 'madeira', 'rose'] },
       { k: 'Acabamento', l: 'Acabamento', t: 'text' },
@@ -461,7 +525,7 @@
         carregarProdutos();
       })
       .withFailureHandler(function (err) { btn.disabled = false; mostrarMsg('Não deu: ' + (err && err.message), false, 'cadastrar-msg'); })
-      .adicionarProduto({ categoria: document.getElementById('p-categoria').value, campos: coletarCampos('p-campos-novo') });
+      .adicionarProduto({ token: TOKEN, categoria: document.getElementById('p-categoria').value, campos: coletarCampos('p-campos-novo') });
   });
 
   // Editar
@@ -494,7 +558,7 @@
         carregarProdutos(); carregarDashboard();
       })
       .withFailureHandler(function (err) { btn.disabled = false; mostrarMsg('Não deu: ' + (err && err.message), false, 'editar-msg'); })
-      .editarProduto({ codigo: cod, campos: coletarCampos('p-campos-editar') });
+      .editarProduto({ token: TOKEN, codigo: cod, campos: coletarCampos('p-campos-editar') });
   });
 
   renderCampos('p-campos-novo', 'moldura', {}, [], 'novo');
@@ -505,6 +569,7 @@
   google.charts.setOnLoadCallback(function () {
     GRAFICOS_PRONTOS = true;
     if (RELATORIO_PENDENTE) { desenharGraficos(RELATORIO_PENDENTE); RELATORIO_PENDENTE = null; }
+    if (FIN_PENDENTE) { desenharFinanceiro(FIN_PENDENTE); FIN_PENDENTE = null; }
   });
 
   document.getElementById('rel-periodos').addEventListener('click', function (ev) {
@@ -577,6 +642,220 @@
     }
   }
 
-  carregarDashboard();
-  carregarProdutos();
+  // ---- Financeiro (caderno digital: gastos + vendas + dashboard de fluxo de caixa) ----
+  var FIN_CATEGORIAS = [], FIN_FORMAS = [], FIN_MES = '', FIN_CAT = '', FIN_PENDENTE = null;
+
+  function hojeISO() {
+    var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+  }
+  // Monta <option>s de uma lista de strings OU de {valor, rotulo}.
+  function optSimples(itens, placeholder) {
+    return (placeholder != null ? '<option value="">' + escapar(placeholder) + '</option>' : '') +
+      (itens || []).map(function (x) {
+        var val = (x && typeof x === 'object') ? x.valor : x;
+        var rot = (x && typeof x === 'object') ? x.rotulo : x;
+        return '<option value="' + escaparAttr(val) + '">' + escapar(rot) + '</option>';
+      }).join('');
+  }
+
+  // Carrega os enums (Config.gs) pros dropdowns e preenche a data com hoje.
+  function carregarFinanceiroConfig() {
+    google.script.run
+      .withSuccessHandler(function (c) {
+        FIN_CATEGORIAS = (c && c.categorias) || [];
+        FIN_FORMAS = (c && c.formas) || [];
+        document.getElementById('g-categoria').innerHTML = optSimples(FIN_CATEGORIAS, '— escolha —');
+        document.getElementById('g-pagamento').innerHTML = optSimples(FIN_FORMAS, '— escolha —');
+        document.getElementById('v-pagamento').innerHTML = optSimples(FIN_FORMAS, '— escolha —');
+        document.getElementById('fin-categoria').innerHTML = optSimples(FIN_CATEGORIAS, 'Todas as categorias');
+      })
+      .withFailureHandler(function (err) { console.error('fin config:', err && err.message); })
+      .financeiroConfig(TOKEN);
+    document.getElementById('g-data').value = hojeISO();
+    document.getElementById('v-data').value = hojeISO();
+  }
+
+  // Lançar gasto
+  document.getElementById('form-gasto').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = this.querySelector('button[type=submit]'); btn.disabled = true;
+    mostrarMsg('Salvando…', true, 'lanc-gasto-msg');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false;
+        mostrarMsg('Gasto salvo ✅ — ' + r.id + ' · ' + brl(r.valor) + ' · ' + escapar(r.categoria) + '.', true, 'lanc-gasto-msg');
+        document.getElementById('form-gasto').reset();
+        document.getElementById('g-data').value = hojeISO();
+        if (document.getElementById('financeiro').classList.contains('ativa')) carregarFinanceiro();
+      })
+      .withFailureHandler(function (err) { btn.disabled = false; if (erroEhSessao(err)) return sairLocal(); mostrarMsg('Não deu: ' + (err && err.message), false, 'lanc-gasto-msg'); })
+      .lancarGasto({
+        token: TOKEN,
+        data: document.getElementById('g-data').value,
+        descricao: document.getElementById('g-descricao').value,
+        valor: document.getElementById('g-valor').value,
+        categoria: document.getElementById('g-categoria').value,
+        pagamento: document.getElementById('g-pagamento').value,
+        obs: document.getElementById('g-obs').value
+      });
+  });
+
+  // Lançar venda
+  document.getElementById('form-venda').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = this.querySelector('button[type=submit]'); btn.disabled = true;
+    mostrarMsg('Salvando…', true, 'lanc-venda-msg');
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false;
+        mostrarMsg('Venda salva ✅ — ' + r.id + ' · ' + brl(r.valor) + '.', true, 'lanc-venda-msg');
+        document.getElementById('form-venda').reset();
+        document.getElementById('v-data').value = hojeISO();
+        if (document.getElementById('financeiro').classList.contains('ativa')) carregarFinanceiro();
+      })
+      .withFailureHandler(function (err) { btn.disabled = false; if (erroEhSessao(err)) return sairLocal(); mostrarMsg('Não deu: ' + (err && err.message), false, 'lanc-venda-msg'); })
+      .lancarVenda({
+        token: TOKEN,
+        data: document.getElementById('v-data').value,
+        valor: document.getElementById('v-valor').value,
+        forma_pagamento: document.getElementById('v-pagamento').value,
+        cliente: document.getElementById('v-cliente').value,
+        obs: document.getElementById('v-obs').value
+      });
+  });
+
+  // Filtros (recalculam o dashboard)
+  document.getElementById('fin-mes').addEventListener('change', function () { FIN_MES = this.value; carregarFinanceiro(); });
+  document.getElementById('fin-categoria').addEventListener('change', function () { FIN_CAT = this.value; carregarFinanceiro(); });
+
+  function carregarFinanceiro() {
+    document.getElementById('fin-kpis').innerHTML = '<span class="carregando">Carregando…</span>';
+    google.script.run
+      .withSuccessHandler(renderFinanceiro)
+      .withFailureHandler(function (err) {
+        if (erroEhSessao(err)) return sairLocal();
+        document.getElementById('fin-kpis').innerHTML = '<span class="vazio">Erro: ' + escapar(err && err.message) + '</span>';
+      })
+      .financeiroResumo(TOKEN, FIN_MES, FIN_CAT);
+  }
+
+  function renderFinanceiro(d) {
+    if (!d) { document.getElementById('fin-kpis').innerHTML = '<span class="vazio">Não consegui carregar.</span>'; return; }
+
+    var selMes = document.getElementById('fin-mes');
+    selMes.innerHTML = optSimples([{ valor: '', rotulo: 'Acumulado (todos os meses)' }].concat(d.meses || []), null);
+    selMes.value = d.mes_sel || '';
+
+    var p = d.periodo || {};
+    var vv = d.variacao || { tem: false };
+    function delta(pct, ruimSeSobe) {
+      if (!vv.tem || pct == null) return '';
+      var igual = pct === 0, sobe = pct > 0;
+      var bom = igual ? false : ((sobe && !ruimSeSobe) || (!sobe && ruimSeSobe));
+      var cls = igual ? 'igual' : (bom ? 'bom' : 'ruim');
+      var seta = igual ? '→' : (sobe ? '▲' : '▼');
+      return '<div class="delta ' + cls + '">' + seta + ' ' + Math.abs(pct) + '% vs ' + escapar(vv.mes_anterior) + '</div>';
+    }
+    document.getElementById('fin-kpis').innerHTML = [
+      ['Entrada', brl(p.entrada), delta(vv.entrada, false)],
+      ['Saída', brl(p.saida), delta(vv.saida, true)],
+      ['Saldo', brl(p.saldo), delta(vv.saldo, false)],
+      ['Margem', (p.margem != null ? p.margem : 0) + '%', '']
+    ].map(function (c) {
+      return '<div class="card"><div class="rotulo">' + c[0] + '</div><div class="valor">' + c[1] + '</div>' + c[2] + '</div>';
+    }).join('');
+
+    var ac = d.acumulado || {};
+    var frases = [];
+    frases.push('Saldo acumulado de <strong>' + brl(ac.saldo) + '</strong> (entrou ' + brl(ac.entrada) + ', saiu ' + brl(ac.saida) + ').');
+    if (d.melhor_mes) frases.push('Melhor mês até agora: <strong>' + escapar(d.melhor_mes.rotulo) + '</strong> (saldo ' + brl(d.melhor_mes.saldo) + ').');
+    if (d.maior_categoria_acumulada) frases.push('Maior gasto: <strong>' + escapar(d.maior_categoria_acumulada.categoria) + '</strong> — ' + brl(d.maior_categoria_acumulada.valor) + ' (' + d.maior_categoria_acumulada.pct + '% das saídas).');
+    frases.push('Margem acumulada de <strong>' + (ac.margem || 0) + '%</strong> (quanto sobra de cada real que entra).');
+    document.getElementById('fin-insights').innerHTML = '<ul class="insights">' + frases.map(function (f) { return '<li>' + f + '</li>'; }).join('') + '</ul>';
+
+    var cats = d.saidas_por_categoria || [];
+    document.getElementById('fin-categoria-lista').innerHTML = cats.length
+      ? '<table><thead><tr><th>Categoria</th><th>Valor</th><th>%</th></tr></thead><tbody>' +
+        cats.map(function (c) {
+          var hl = (d.cat_sel && c.categoria === d.cat_sel) ? ' style="font-weight:700"' : '';
+          return '<tr' + hl + '><td>' + escapar(c.categoria) + '</td><td>' + brl(c.valor) + '</td><td>' + c.pct + '%</td></tr>';
+        }).join('') + '</tbody></table>'
+      : '<p class="vazio">Sem saídas no período.</p>';
+
+    var lanc = d.lancamentos || [];
+    document.getElementById('fin-lancamentos').innerHTML = lanc.length
+      ? '<table><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Categoria</th><th>Valor</th></tr></thead><tbody>' +
+        lanc.map(function (l) {
+          var ent = l.tipo === 'entrada';
+          return '<tr><td>' + escapar(l.data) + '</td><td>' + (ent ? 'Entrada' : 'Saída') +
+            '</td><td>' + escapar(l.descricao) + '</td><td>' + escapar(l.categoria) +
+            '</td><td class="' + (ent ? 'lanc-ent' : 'lanc-sai') + '">' + (ent ? '+ ' : '− ') + brl(l.valor) + '</td></tr>';
+        }).join('') + '</tbody></table>'
+      : '<p class="vazio">Sem lançamentos no período.</p>';
+
+    if (GRAFICOS_PRONTOS) desenharFinanceiro(d); else FIN_PENDENTE = d;
+  }
+
+  function desenharFinanceiro(d) {
+    var pm = d.por_mes || [];
+    var elB = document.getElementById('fin-barras');
+    if (!pm.length) { elB.innerHTML = '<p class="vazio">Sem lançamentos ainda.</p>'; }
+    else {
+      var db = new google.visualization.DataTable();
+      db.addColumn('string', 'Mês'); db.addColumn('number', 'Entrada'); db.addColumn('number', 'Saída');
+      pm.forEach(function (m) { db.addRow([m.rotulo, m.entrada, m.saida]); });
+      new google.visualization.ColumnChart(elB).draw(db, {
+        height: 240, legend: { position: 'top' }, colors: ['#059669', '#dc2626'],
+        chartArea: { width: '82%', height: '70%' }
+      });
+    }
+
+    var elS = document.getElementById('fin-saldo');
+    if (!pm.length) { elS.innerHTML = '<p class="vazio">Sem lançamentos ainda.</p>'; }
+    else {
+      var ds = new google.visualization.DataTable();
+      ds.addColumn('string', 'Mês'); ds.addColumn('number', 'Saldo acumulado');
+      pm.forEach(function (m) { ds.addRow([m.rotulo, m.saldo_acumulado]); });
+      new google.visualization.LineChart(elS).draw(ds, {
+        legend: 'none', height: 220, colors: ['#7c3aed'], pointSize: 5,
+        chartArea: { width: '82%', height: '72%' }
+      });
+    }
+
+    var cats = d.saidas_por_categoria || [];
+    var elC = document.getElementById('fin-categoria-graf');
+    if (!cats.length) { elC.innerHTML = '<p class="vazio">Sem saídas no período.</p>'; }
+    else {
+      var dc = new google.visualization.DataTable();
+      dc.addColumn('string', 'Categoria'); dc.addColumn('number', 'Valor');
+      cats.forEach(function (c) { dc.addRow([c.categoria, c.valor]); });
+      new google.visualization.PieChart(elC).draw(dc, {
+        height: 240, chartArea: { width: '92%', height: '82%' },
+        colors: ['#7c3aed', '#a78bfa', '#c4b5fd', '#059669', '#dc2626', '#f59e0b', '#0ea5e9', '#9ca3af']
+      });
+    }
+
+    var elCB = document.getElementById('fin-categoria-barras');
+    if (!cats.length) { elCB.innerHTML = '<p class="vazio">Sem saídas no período.</p>'; }
+    else {
+      var dcb = new google.visualization.DataTable();
+      dcb.addColumn('string', 'Categoria'); dcb.addColumn('number', 'Gasto (R$)');
+      cats.forEach(function (c) { dcb.addRow([c.categoria, c.valor]); });
+      new google.visualization.BarChart(elCB).draw(dcb, {
+        height: Math.max(220, cats.length * 40), legend: 'none', colors: ['#7c3aed'],
+        chartArea: { width: '62%', height: '86%' }
+      });
+    }
+  }
+
+  // Bootstrap: tem token salvo? confere no servidor; senão, mostra o login.
+  if (TOKEN) {
+    google.script.run
+      .withSuccessHandler(function (r) { if (r && r.ok) entrarNoApp(); else sairLocal(); })
+      .withFailureHandler(function () { sairLocal(); })
+      .verificarSessao(TOKEN);
+  } else {
+    mostrarLogin();
+  }
 </script>

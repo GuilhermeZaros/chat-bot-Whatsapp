@@ -18,13 +18,16 @@ function _ehDisponivel(valor) {
 function buscarMolduras(filtros) {
   filtros = filtros || {};
   var limite = Math.min(Number(filtros.limite) || 3, 5);
-  var cor = _normalizarCor(filtros.cor);
+  var cor = _normalizarCor(filtros.cor); // normaliza a query
+  var estilo = filtros.estilo ? String(filtros.estilo).toLowerCase().trim() : '';
 
   return lerAba(ABAS.MOLDURAS).filter(function (m) {
     if (!_ehDisponivel(m.Disponivel)) return false;
     if (Number(m.Estoque_atual_m) <= 0) return false;
-    if (filtros.estilo && String(m.Estilo).toLowerCase() !== String(filtros.estilo).toLowerCase()) return false;
-    if (cor && String(m.Cor).toLowerCase() !== cor) return false;
+    // estilo: "contém" (ex: "caixa invertida" acha "caixa invertida (filete)").
+    if (estilo && String(m.Estilo).toLowerCase().indexOf(estilo) < 0) return false;
+    // cor: normaliza OS DOIS lados (o catálogo grava feminino; o normalizador unifica).
+    if (cor && _normalizarCor(String(m.Cor)) !== cor) return false;
     if (filtros.acabamento && String(m.Acabamento).toLowerCase() !== String(filtros.acabamento).toLowerCase()) return false;
     return true;
   }).slice(0, limite).map(function (m) {
@@ -56,11 +59,13 @@ function listarMateriais(tipo) {
   return out;
 }
 
-// Acha um produto por código em qualquer das 4 abas de catálogo.
+// Acha um produto por código em qualquer das abas de catálogo (inclui avulsos).
 function buscarProduto(codigo) {
   var cats = [['moldura', ABAS.MOLDURAS], ['vidro', ABAS.VIDROS],
-              ['chapa', ABAS.CHAPAS], ['espelho', ABAS.ESPELHOS]];
+              ['chapa', ABAS.CHAPAS], ['espelho', ABAS.ESPELHOS],
+              ['avulso', ABAS.AVULSOS]];
   for (var i = 0; i < cats.length; i++) {
+    if (!abaExiste(cats[i][1])) continue; // Avulsos pode não existir ainda
     var achou = acharPorCodigo(cats[i][1], codigo);
     if (achou) return { categoria: cats[i][0], aba: cats[i][1], dados: achou };
   }
@@ -140,13 +145,15 @@ function listarProdutos() {
     ['moldura', ABAS.MOLDURAS, 'Valor_por_metro', 'Estoque_atual_m', 'm'],
     ['vidro',   ABAS.VIDROS,   'Valor_por_m2',    'Estoque_atual_m2', 'm²'],
     ['chapa',   ABAS.CHAPAS,   'Valor_por_m2',    'Estoque_atual_m2', 'm²'],
-    ['espelho', ABAS.ESPELHOS, 'Valor_por_m2',    'Estoque_atual_m2', 'm²']
+    ['espelho', ABAS.ESPELHOS, 'Valor_por_m2',    'Estoque_atual_m2', 'm²'],
+    ['avulso',  ABAS.AVULSOS,  'Valor_por_m2',    'Estoque_atual_m2', 'm²']
   ];
   var out = [];
   grupos.forEach(function (g) {
+    if (!abaExiste(g[1])) return; // Avulsos pode não existir ainda
     lerAba(g[1]).forEach(function (x) {
       out.push({
-        codigo: x.Codigo, nome: x.Nome, categoria: g[0], modelo: x.Modelo || '',
+        codigo: x.Codigo, nome: x.Nome, categoria: g[0], marca: x.Marca || '',
         preco: Number(x[g[2]]), estoque: Number(x[g[3]]), unidade: g[4],
         disponivel: _ehDisponivel(x.Disponivel)
       });
