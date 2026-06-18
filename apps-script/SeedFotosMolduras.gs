@@ -1,0 +1,115 @@
+// SeedFotosMolduras.gs — GERADO por scripts/gerar-fotos.js. NÃO editar à mão.
+// codigo(referência) -> nome do arquivo da foto. A função lista a pasta do Drive (como o dono)
+// e grava Foto_URL = thumbnail (JPEG, resolve heic). Idempotente.
+var FOTO_PASTA_ID = "1ScQmpi4t4sarN_sWTW9NgS_LbthhG8zH";
+var FOTO_ARQUIVO = {
+  "160-RM9": "0BA80932-83D4-4BD7-8476-73626552B85E.heic",
+  "066-R315": "94FD642B-B4BA-4EEC-9155-E9916AA7517B.heic",
+  "054-R385": "1440FC38-CB09-4D6C-AF97-6883DBB165B0.heic",
+  "066-R390": "4C36FDD1-88B9-4E22-9238-E084470E978C.heic",
+  "050-R390": "F4769992-5E7F-482D-8816-E0588ADD65C2.heic",
+  "050-R385": "EA5E13CD-1570-4C44-BFD5-8EFC1AE2C894.heic",
+  "397-R395": "592D9E65-178A-48B7-9CD2-52D44E2865ED.heic",
+  "0870-7705": "7B017F1E-380A-4D6F-B628-924888A88468.heic",
+  "0870-7704": "63E4F541-4851-487E-ADC9-98A3F565CDED.heic",
+  "165-R-305": "253C0D03-B90C-4503-A6BB-4FB18BBE6FB9.heic",
+  "165-R385": "BB758FED-A722-4E0A-88B8-DE8E98C6EF3E.heic",
+  "9N-9221": "060DA462-33B6-4E0C-B2D0-EFCA206DDDD9.heic",
+  "9N-9219": "F5C9A463-5C66-4433-A91B-019FC9984540.heic",
+  "0122-2071": "AACA80BF-D5D6-4514-A2EB-09CE51FA2042.heic",
+  "3085-9325": "C09A7916-E24B-47D0-ACFD-499BEF1BA048.heic",
+  "114-BTLA": "A8742BC4-20AF-4582-9499-E8E75EC31940.heic",
+  "400-R385": "3AA17019-17B2-49E7-891F-A53EA3E32114.heic",
+  "400-R300": "568EB4B8-742F-46D7-AE3D-559692BDDCC2.heic",
+  "914-804": "1EB544B6-1CC1-4EB7-8291-C92027997131.heic",
+  "401-R385": "675DB677-52E7-44AB-B172-61D2A4AFBE6F.heic",
+  "401-R390": "00CADD85-99B4-4598-968E-93DD34BC33B6.heic",
+  "395-3059": "E86CE8CB-223D-4BF1-A399-5708619B7CC7.heic",
+  "395-R166": "AA93AEB2-891A-4747-B644-F14CC5E09125.heic",
+  "395-R116": "332A403A-AA14-4BC8-8082-66F6FB2A4509.heic",
+  "395-R390": "23136169-4B57-4279-A24C-4745E0764F61.heic",
+  "395-R385": "CE1A2E97-2967-46DA-B554-B5D280617207.heic",
+  "395-R405": "B4D76215-8B61-4045-BEDE-0575C31D0B6E.heic",
+  "245-406": "CE8709A5-CA28-4122-ABB0-BA8D8645C1E4.heic",
+  "060-655": "C88E1F53-F425-46B5-89ED-C21490E614C6.heic",
+  "115-VO": "733843AD-B603-41D9-8BE2-FD9390FF0E40.heic",
+  "115-AF": "229C3939-B17D-498F-8F40-9BE9C0E49ADF.heic",
+  "014-AF": "4EA1D26D-953B-45F4-B448-25E53E010D90.heic",
+  "3043-24": "8A1EE862-E8DB-499F-AA56-0D31876B3DBC.heic",
+  "390-166": "583FEEA1-D2B7-4FCE-A2C0-5258B13EF5DD.heic",
+  "390-R305": "F37005AB-CA83-4589-9998-E921B0C00EFA.heic",
+  "390-3175": "6F85D230-BEA2-4F2A-83A1-AFB165FAC9E9.heic",
+  "390-116": "7F62193F-B768-4BDD-9786-E423E2DD3F57.heic",
+  "390-3059": "03D33CC0-50DB-4540-9C3F-8BEE6B28E2D3.heic",
+  "390-R390": "6E49B750-CB90-4A7C-9E0C-226E531D5B0F.heic",
+  "375-3059": "62AF6B06-F7F8-4628-80AC-F6D614F76F02.heic",
+  "375-R315": "5654A8A2-0214-4091-9A02-9B2B99862BEE.heic",
+  "360-R400": "5C6D33B2-FB8C-4036-B2A4-741A4BD47B38.heic",
+  "375-R385": "600C9D14-4452-4CB5-A815-B03C71215622.heic",
+  "375-R405": "C0907653-B162-4767-92D3-D204B457272A.heic",
+  "375-R300": "E2929944-9B11-470F-B44A-99A896A9DF5D.heic",
+  "360-166": "1D474AAB-5CBA-4264-B5E7-5D39121CB77F.heic",
+  "375-R390": "0A03E37A-CCD4-44EC-A093-4E368428100A.heic",
+  "360-116": "6FD3EAFA-004D-461D-88D1-F7BC87C04EE0.jpeg",
+  "194-RM10": "329D2050-B96D-4376-B42D-59BB1875E355.heic",
+  "194-PPF": "1BDB5264-044C-4189-987C-B954DF3FB405.heic",
+  "5003N-9289": "451FEFDE-6F6D-4AF2-A013-4069B9C05555.heic",
+  "194-RM3": "50FDB627-64F3-4033-BE12-F1EBA87C3BB4.heic",
+  "800-R166": "29AD728C-1E32-4398-8BE0-539DEF966A3F.heic",
+  "060-3059": "IMG_3840.jpeg",
+  "165-3059": "IMG_3841.jpeg",
+  "245-3059": "IMG_3842.jpeg",
+  "060-3260": "IMG_3844.jpeg",
+  "054-600": "IMG_3843.jpeg",
+  "050-R345": "IMG_3845.jpeg",
+  "054-R345": "IMG_3846.jpeg",
+  "1018-1215": "IMG_3847.jpeg",
+  "1304-2125": "IMG_3848.jpeg",
+  "957-1010": "IMG_3849.jpeg",
+  "0473-2017": "IMG_3851.jpeg",
+  "0836-8215": "IMG_3852.jpeg",
+  "947-1010": "IMG_3850.jpeg",
+  "054-3175": "IMG_3859.jpeg",
+  "054-R350": "IMG_3858.jpeg",
+  "115-AL": "IMG_3857.jpeg",
+  "0847-6001": "IMG_3856.jpeg",
+  "245-3140": "IMG_3855.jpeg",
+  "947-2010": "IMG_3854.jpeg",
+  "1018-2515": "IMG_3853.jpeg",
+  "0394-2504": "IMG_3866.jpeg",
+  "0473-2018": "IMG_3865.jpeg",
+  "1014-3140": "IMG_3864.jpeg",
+  "0011-2070": "IMG_3863.jpeg",
+  "060-116": "IMG_3867.jpeg",
+  "870-2260": "IMG_3868.jpeg",
+  "225-116": "IMG_3870.jpeg",
+  "0058-0060": "IMG_3871.jpeg",
+  "245-116": "IMG_3872.jpeg",
+  "M48312014-2": "IMG_3873.jpeg",
+  "300-RM-116": "IMG_3874.jpeg",
+  "0004-7705": "IMG_3913.jpeg",
+  "S-REF-1": "42C6E9D5-FCA4-4B4F-8266-442D59CAEA7E.heic",
+  "S-REF-2": "54F90D1E-F10D-415D-B6BB-8E61382B08B7.heic",
+  "S-REF-3": "95F93B87-F4A1-47B4-A4AB-1E32E101239A.heic",
+  "S-REF-4": "IMG_3869.jpeg"
+};
+
+function importarFotosMolduras() {
+  return comLock(function () {
+    var pasta = DriveApp.getFolderById(FOTO_PASTA_ID);
+    var idPorNome = {};
+    var it = pasta.getFiles();
+    while (it.hasNext()) { var f = it.next(); idPorNome[f.getName()] = f.getId(); }
+    var molduras = lerAba(ABAS.MOLDURAS);
+    var n = 0, faltou = [];
+    molduras.forEach(function (m) {
+      var arq = FOTO_ARQUIVO[String(m.Codigo).trim()];
+      if (!arq) return;
+      var id = idPorNome[arq];
+      if (!id) { faltou.push(m.Codigo); return; }
+      atualizarCelula(ABAS.MOLDURAS, m._linha, 'Foto_URL', 'https://drive.google.com/thumbnail?id=' + id + '&sz=w1000');
+      n++;
+    });
+    return 'Fotos ligadas em ' + n + ' molduras.' + (faltou.length ? ' Sem arquivo no Drive: ' + faltou.length + ' (' + faltou.slice(0, 8).join(', ') + ').' : '');
+  });
+}
