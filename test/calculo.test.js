@@ -230,3 +230,26 @@ test('_montarValoresQuadro: override + taxa — itens somam (total − taxa) e p
   assert.equal(r.total, 300);
   assert.equal(Number(r.valores.reduce((a, b) => a + b, 0).toFixed(2)), 275);
 });
+
+test('calcularOrcamento: vidroDuplo conta vidro 2x e ignora chapa', () => {
+  // 30x40 -> area 0.12 m2 ; perim 1.4 m
+  const orc = ctx.calcularOrcamento(30, 40, [
+    { categoria: 'moldura', nome: 'M', preco: 100 },
+    { categoria: 'vidro', nome: 'V', preco: 180 },
+    { categoria: 'chapa', nome: 'C', preco: 100 }
+  ], { vidroDuplo: true });
+  assert.equal(orc.itens.length, 2);          // chapa ignorada
+  assert.equal(orc.itens[1].valor, 43.2);     // 0.12 * 180 * 2
+  assert.equal(orc.valor_total, 183.2);       // 140 + 43.2
+});
+
+test('calcularOrcamento: paspatur soma area x preco numa linha propria', () => {
+  const orc = ctx.calcularOrcamento(30, 40, [
+    { categoria: 'moldura', nome: 'M', preco: 100 },
+    { categoria: 'vidro', nome: 'V', preco: 180 },
+    { categoria: 'chapa', nome: 'C', preco: 100 }
+  ], { paspatur: true, paspaturPrecoM2: 330 });
+  const pas = orc.itens.find(x => x.categoria === 'paspatur');
+  assert.equal(pas.valor, 39.6);              // 0.12 * 330
+  assert.equal(orc.valor_total, 213.2);       // 140 + 21.6 + 12 + 39.6
+});

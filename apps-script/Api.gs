@@ -46,7 +46,8 @@ function _rotear(action, p) {
     case 'calcularOrcamento':
       return orcamentoPorCodigos({
         moldura: p.moldura, vidro: p.vidro, chapa: p.chapa, espelho: p.espelho,
-        largura: p.largura, altura: p.altura, objetoAlto: p.objetoAlto
+        largura: p.largura, altura: p.altura, objetoAlto: p.objetoAlto,
+        vidroDuplo: p.vidroDuplo, paspatur: p.paspatur
       });
     case 'relatorios':
       return relatorios(p.periodo);

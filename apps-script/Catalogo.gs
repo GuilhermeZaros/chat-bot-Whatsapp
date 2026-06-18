@@ -14,6 +14,19 @@ function _ehDisponivel(valor) {
   return valor === true || String(valor).toUpperCase() === 'TRUE';
 }
 
+// Preço do paspatur por m²: vem do item "passepartout" na aba Avulsos (fonte única).
+// Fallback 330 se a aba/item ainda não existir (dono ainda não rodou o seed de avulsos).
+function _precoPaspatur() {
+  if (!abaExiste(ABAS.AVULSOS)) return 330;
+  var linhas = lerAba(ABAS.AVULSOS);
+  for (var i = 0; i < linhas.length; i++) {
+    if (/passepartout|paspatur/i.test(String(linhas[i].Nome))) {
+      return Number(linhas[i].Valor_por_m2) || 330;
+    }
+  }
+  return 330;
+}
+
 // Molduras que casam com os filtros E têm estoque (> 0). Retorna até `limite` (máx 5).
 function buscarMolduras(filtros) {
   filtros = filtros || {};
@@ -116,7 +129,13 @@ function orcamentoPorCodigos(args) {
     });
   }
   if (itens.length === 0) throw new Error('Informe pelo menos um item (moldura, vidro, chapa ou espelho).');
-  return calcularOrcamento(largura, altura, itens, { objetoAlto: _ehDisponivel(args.objetoAlto) });
+  var paspatur = _ehDisponivel(args.paspatur);
+  return calcularOrcamento(largura, altura, itens, {
+    objetoAlto: _ehDisponivel(args.objetoAlto),
+    vidroDuplo: _ehDisponivel(args.vidroDuplo),
+    paspatur: paspatur,
+    paspaturPrecoM2: paspatur ? _precoPaspatur() : 0
+  });
 }
 
 // Simula a viabilidade de um serviço: N quadros da MESMA moldura e tamanho. Lê o perfil e

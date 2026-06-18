@@ -123,7 +123,9 @@ function _distribuirValor(valoresCalculados, valorTotalCalculado, valorCobrado) 
 var TAXA_PINTURA_CHAPA = 25;
 
 // itens: array de { categoria:'moldura'|'vidro'|'chapa'|'espelho', nome, preco }
-// opcoes (opcional): { objetoAlto:true } soma TAXA_PINTURA_CHAPA ao total (taxa interna).
+// opcoes (opcional): { objetoAlto:true } soma a pintura da chapa; { vidroDuplo:true } conta o
+//   vidro 2× e ignora a chapa (quadro de 2 vidros); { paspatur:true, paspaturPrecoM2:N } soma
+//   o paspatur (área × N) numa linha própria.
 // Retorna o orçamento detalhado item a item.
 function calcularOrcamento(larguraCm, alturaCm, itens, opcoes) {
   opcoes = opcoes || {};
@@ -134,6 +136,8 @@ function calcularOrcamento(larguraCm, alturaCm, itens, opcoes) {
 
   for (var i = 0; i < itens.length; i++) {
     var it = itens[i];
+    if (opcoes.vidroDuplo && it.categoria === 'chapa') continue; // 2 vidros não leva chapa
+    var dobra = (opcoes.vidroDuplo && it.categoria === 'vidro') ? 2 : 1;
     var bruto, calculoTxt, quantidade, unidade, consumo;
 
     if (it.categoria === 'moldura') {
@@ -144,11 +148,11 @@ function calcularOrcamento(larguraCm, alturaCm, itens, opcoes) {
       // baixa de estoque pelo consumo real na vara (cobrança fica no perímetro)
       consumo = consumoMolduraM(larguraCm, alturaCm, it.perfilCm);
     } else {
-      quantidade = area;
+      quantidade = area * dobra;
       unidade = 'm²';
-      bruto = area * Number(it.preco);
-      calculoTxt = 'área ' + area.toFixed(3) + 'm² x R$ ' + it.preco + '/m²';
-      consumo = area; // materiais: baixa pela área mesmo
+      bruto = area * Number(it.preco) * dobra;
+      calculoTxt = (dobra === 2 ? '2x ' : '') + 'área ' + area.toFixed(3) + 'm² x R$ ' + it.preco + '/m²';
+      consumo = area * dobra; // materiais: baixa pela área (×2 se vidro duplo)
     }
 
     var valor = bruto;
@@ -162,6 +166,18 @@ function calcularOrcamento(larguraCm, alturaCm, itens, opcoes) {
       consumo: Number(consumo.toFixed(3))
     });
     total += valor;
+  }
+
+  // Paspatur (papel-cartão): material à parte, cobrado pela ÁREA do quadro final.
+  if (opcoes.paspatur && Number(opcoes.paspaturPrecoM2) > 0) {
+    var pasValor = area * Number(opcoes.paspaturPrecoM2);
+    linhas.push({
+      categoria: 'paspatur', item: 'Paspatur',
+      quantidade: Number(area.toFixed(3)), unidade: 'm²',
+      calculo: 'área ' + area.toFixed(3) + 'm² x R$ ' + opcoes.paspaturPrecoM2 + '/m²',
+      valor: Number(pasValor.toFixed(2)), consumo: Number(area.toFixed(3))
+    });
+    total += pasValor;
   }
 
   // Objeto em relevo na chapa → pintura da chapa (taxa fixa interna, não detalhada ao cliente).
