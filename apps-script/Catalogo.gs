@@ -43,10 +43,14 @@ function buscarMolduras(filtros) {
     if (cor && _normalizarCor(String(m.Cor)) !== cor) return false;
     if (filtros.acabamento && String(m.Acabamento).toLowerCase() !== String(filtros.acabamento).toLowerCase()) return false;
     return true;
+  }).sort(function (a, b) {
+    // mais baratas primeiro (cobrança é por metro de perfil)
+    return (Number(a.Valor_por_metro) || 0) - (Number(b.Valor_por_metro) || 0);
   }).slice(0, limite).map(function (m) {
     return {
       codigo: m.Codigo, nome: m.Nome, estilo: m.Estilo, cor: m.Cor,
       acabamento: m.Acabamento, preco_metro: Number(m.Valor_por_metro),
+      largura_perfil_cm: Number(m.Largura_perfil_cm) || 0,
       foto_url: m.Foto_URL, descricao: m.Descricao, tags: m.Tags,
       estoque_atual_m: Number(m.Estoque_atual_m), disponivel: true
     };
