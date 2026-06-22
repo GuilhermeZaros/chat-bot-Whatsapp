@@ -15,7 +15,7 @@ function _proximoCodigo(prefixo, codigosExistentes) {
 // Cadastra um produto novo. args: { categoria, campos: { <Coluna>: valor, ... } }
 // Gera o código, grava na aba e registra 'cadastro' no histórico.
 function adicionarProduto(args) {
-  _validarSessao(args.token);
+  _validarGestao(args.token);
   var categoria = args.categoria;
   var aba = ABA_POR_CATEGORIA[categoria];
   var prefixo = _PREFIXO_CAT[categoria];
@@ -66,7 +66,7 @@ function obterProduto(codigo) {
 // Edita um produto. args: { codigo, campos: { <Coluna>: valor } }.
 // Atualiza só colunas reais; NÃO mexe em Codigo nem no estoque atual (muda por venda/entrada).
 function editarProduto(args) {
-  _validarSessao(args.token);
+  _validarGestao(args.token);
   var campos = args.campos || {};
   return comLock(function () {
     var p = buscarProduto(args.codigo);

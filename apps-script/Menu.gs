@@ -10,6 +10,7 @@ function onOpen() {
     .addSeparator()
     .addItem('Criar/conferir abas financeiras', 'garantirAbasFinanceiro')
     .addItem('Conferir/criar usuários (login)', 'garantirAbaUsuarios')
+    .addItem('Criar aba Oficina + papéis (e gerar token do bot)', 'prepararOficina')
     .addSeparator()
     .addItem('Remover coluna Modelo das molduras (1x)', 'removerColunaModelo')
     .addItem('Importar custos das molduras (do relatório)', 'importarCustosMolduras')

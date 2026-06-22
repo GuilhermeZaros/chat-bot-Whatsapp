@@ -1,17 +1,28 @@
 <style>
   :root { --bg:#f4f5f7; --card:#fff; --ink:#1f2933; --muted:#6b7280;
-          --brand:#7c3aed; --ok:#059669; --warn:#dc2626; --line:#e5e7eb; }
+          --navy:#13294b; --gold:#c9a227; --gold-soft:#e6c869;
+          --brand:#13294b; --ok:#059669; --warn:#dc2626; --line:#e5e7eb; }
   * { box-sizing: border-box; }
   body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
          background:var(--bg); color:var(--ink); }
-  header { background:var(--brand); color:#fff; padding:14px 18px; }
+  header { background:var(--navy); color:#fff; padding:14px 18px; border-bottom:3px solid var(--gold); }
   header h1 { margin:0; font-size:18px; font-weight:600; }
   header p { margin:2px 0 0; font-size:12px; opacity:.85; }
-  nav { display:flex; gap:4px; overflow-x:auto; background:#fff; border-bottom:1px solid var(--line);
-        padding:0 8px; position:sticky; top:0; z-index:5; }
-  nav button { border:0; background:none; padding:14px 14px; font-size:14px; color:var(--muted);
+  #barras { position:sticky; top:0; z-index:5; }
+  nav#grupos { display:flex; gap:2px; overflow-x:auto; background:var(--navy); padding:0 8px; }
+  nav#grupos button { border:0; background:none; padding:14px 16px; font-size:14px; color:rgba(255,255,255,.72);
                border-bottom:3px solid transparent; cursor:pointer; white-space:nowrap; }
-  nav button.ativo { color:var(--brand); border-bottom-color:var(--brand); font-weight:600; }
+  nav#grupos button:hover { color:#fff; }
+  nav#grupos button.ativo { color:var(--gold-soft); border-bottom-color:var(--gold); font-weight:600; }
+  #subnav { display:none; gap:8px; overflow-x:auto; background:#fff; border-bottom:1px solid var(--line);
+            padding:9px 12px; }
+  #subnav.mostrar { display:flex; }
+  .subgrupo { display:none; gap:8px; }
+  .subgrupo.ativa { display:flex; }
+  .subgrupo button { border:1px solid var(--line); background:#fff; color:var(--muted); padding:7px 14px;
+                     border-radius:999px; cursor:pointer; font-size:13px; white-space:nowrap; }
+  .subgrupo button:hover { border-color:var(--navy); color:var(--navy); }
+  .subgrupo button.ativo { background:var(--navy); color:#fff; border-color:var(--navy); font-weight:600; }
   main { padding:16px; max-width:900px; margin:0 auto; }
   .aba { display:none; }
   .aba.ativa { display:block; }
@@ -37,8 +48,9 @@
   .toggle button.ativo { background:var(--brand); color:#fff; border-color:var(--brand); font-weight:600; }
   .form { display:flex; flex-direction:column; gap:12px; max-width:520px; }
   .form label { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); }
-  .form select, .form input { padding:10px; border:1px solid var(--line); border-radius:10px;
-                              font-size:15px; color:var(--ink); background:#fff; }
+  .form select, .form input, .form textarea { padding:10px; border:1px solid var(--line); border-radius:10px;
+                              font-size:15px; color:var(--ink); background:#fff; font-family:inherit; }
+  .form textarea { resize:vertical; }
   .lin2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .acoes { display:flex; gap:10px; margin-top:4px; }
   .acoes button { padding:12px 16px; border-radius:10px; border:0; font-size:15px; cursor:pointer; }
@@ -92,4 +104,18 @@
   .insights-box ul.insights li { font-size:14px; color:var(--ink); margin:6px 0; }
   .lanc-ent { color:var(--ok); font-weight:600; }
   .lanc-sai { color:var(--warn); font-weight:600; }
+  /* esconder por atributo, à prova do .form{display:flex} */
+  [hidden] { display:none !important; }
+  /* ordens da oficina */
+  .of-item { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px;
+             margin-bottom:10px; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  .of-cab { display:flex; align-items:center; gap:8px; justify-content:space-between; }
+  .of-cab strong { font-size:15px; }
+  .of-id { font-size:11px; color:#fff; background:var(--navy); padding:2px 8px; border-radius:999px; }
+  .of-desc { font-size:13px; color:var(--ink); margin:6px 0; white-space:pre-line; }
+  .of-meta { font-size:12px; color:var(--muted); margin:4px 0; }
+  .of-aviso { font-size:12px; margin:6px 0 10px; }
+  .of-btn { margin-top:4px; padding:9px 14px; border-radius:10px; border:0; cursor:pointer;
+            background:var(--navy); color:#fff; font-weight:600; font-size:14px; }
+  .of-btn:disabled { opacity:.6; cursor:default; }
 </style>

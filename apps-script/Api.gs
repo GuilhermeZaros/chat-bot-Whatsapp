@@ -56,6 +56,13 @@ function _rotear(action, p) {
     case 'simularServicoManual':
       return simularServicoManual(p.perfil, p.quantidade, p.largura, p.altura,
                                   p.varas, p.pedaco, _ehDisponivel(p.naoDesencabecado));
+    // Endpoints do BOT (oficina) — protegidos por token, pois o web app é anônimo.
+    case 'oficinaPendentes':
+      if (!_tokenOficinaOk(p.token)) throw new Error('não autorizado');
+      return oficinaPendentes();
+    case 'oficinaConfirmarAviso':
+      if (!_tokenOficinaOk(p.token)) throw new Error('não autorizado');
+      return oficinaConfirmarAviso(p.id, _ehDisponivel(p.ok), p.motivo);
     default:
       throw new Error('Ação desconhecida: ' + action);
   }

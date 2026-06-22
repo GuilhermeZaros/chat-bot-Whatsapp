@@ -1,17 +1,61 @@
 <script>
-  // Navegação das abas (sem reload).
-  document.getElementById('abas').addEventListener('click', function (ev) {
+  // Navegação em 2 níveis: grupos no topo + sub-abas (sem reload).
+  var SUBABA_ATIVA = {}; // lembra a última sub-aba aberta de cada grupo
+
+  function mostrarAba(id) {
+    document.querySelectorAll('.aba').forEach(function (s) {
+      s.classList.toggle('ativa', s.id === id);
+    });
+    if (id === 'relatorios') carregarRelatorios();
+    if (id === 'financeiro') carregarFinanceiro();
+    if (id === 'of-producao') carregarOficinaProducao();
+    if (id === 'of-prontos') carregarOficinaProntos();
+  }
+
+  function selecionarSub(grupo, aba) {
+    SUBABA_ATIVA[grupo] = aba;
+    var sg = document.querySelector('#subnav .subgrupo[data-grupo="' + grupo + '"]');
+    if (sg) sg.querySelectorAll('button').forEach(function (b) {
+      b.classList.toggle('ativo', b.dataset.aba === aba);
+    });
+    mostrarAba(aba);
+  }
+
+  function abrirGrupo(grupo) {
+    document.querySelectorAll('#grupos button').forEach(function (b) {
+      b.classList.toggle('ativo', b.dataset.grupo === grupo);
+    });
+    var sg = document.querySelector('#subnav .subgrupo[data-grupo="' + grupo + '"]');
+    document.querySelectorAll('#subnav .subgrupo').forEach(function (s) {
+      s.classList.toggle('ativa', s === sg);
+    });
+    document.getElementById('subnav').classList.toggle('mostrar', !!sg);
+
+    if (sg) {
+      // escolhe a sub-aba lembrada, mas só se estiver visível pro papel atual; senão a 1ª visível
+      var alvo = SUBABA_ATIVA[grupo];
+      var btnLembrada = alvo ? sg.querySelector('button[data-aba="' + alvo + '"]') : null;
+      if (!btnLembrada || btnLembrada.hidden) {
+        var primeiro = sg.querySelector('button:not([hidden])') || sg.querySelector('button');
+        alvo = primeiro.dataset.aba;
+      }
+      selecionarSub(grupo, alvo);
+    } else {
+      var btn = document.querySelector('#grupos button[data-grupo="' + grupo + '"]');
+      mostrarAba(btn.dataset.aba); // grupo-folha: vai direto pra seção
+    }
+  }
+
+  document.getElementById('grupos').addEventListener('click', function (ev) {
+    var btn = ev.target.closest('button');
+    if (btn) abrirGrupo(btn.dataset.grupo);
+  });
+
+  document.getElementById('subnav').addEventListener('click', function (ev) {
     var btn = ev.target.closest('button');
     if (!btn) return;
-    var alvo = btn.dataset.aba;
-    document.querySelectorAll('#abas button').forEach(function (b) {
-      b.classList.toggle('ativo', b === btn);
-    });
-    document.querySelectorAll('.aba').forEach(function (s) {
-      s.classList.toggle('ativa', s.id === alvo);
-    });
-    if (alvo === 'relatorios') carregarRelatorios();
-    if (alvo === 'financeiro') carregarFinanceiro();
+    var sg = btn.closest('.subgrupo');
+    selecionarSub(sg.dataset.grupo, btn.dataset.aba);
   });
 
   function brl(v) {
@@ -26,7 +70,22 @@
   // ---- Login / sessão ----
   var TOKEN = localStorage.getItem('vera_token') || '';
   var NOME = localStorage.getItem('vera_nome') || '';
+  var PAPEIS = (localStorage.getItem('vera_papeis') || '').split(',').filter(Boolean);
   var APP_INICIADO = false;
+
+  function temGestaoJS(p) { return p.indexOf('atendimento') !== -1 || p.indexOf('dono') !== -1; }
+  function soOficinaJS(p) { return p.indexOf('oficina') !== -1 && !temGestaoJS(p); }
+
+  // Esconde grupos/sub-abas conforme o papel. Só-oficina vê apenas Oficina → Em produção.
+  function aplicarPapeis() {
+    var so = soOficinaJS(PAPEIS);
+    document.querySelectorAll('#grupos button').forEach(function (b) {
+      b.hidden = so && b.dataset.grupo !== 'oficina';
+    });
+    document.querySelectorAll('#subnav .subgrupo[data-grupo="oficina"] button').forEach(function (b) {
+      b.hidden = so && b.dataset.aba !== 'of-producao';
+    });
+  }
 
   function mostrarLogin() {
     document.body.classList.remove('logado');
@@ -41,14 +100,17 @@
   function iniciarApp() {
     if (APP_INICIADO) return;
     APP_INICIADO = true;
+    aplicarPapeis();
+    if (soOficinaJS(PAPEIS)) { abrirGrupo('oficina'); return; } // só-oficina: direto pra fila
     carregarDashboard();
     carregarProdutos();
     carregarFinanceiroConfig();
   }
   function sairLocal() {
-    TOKEN = ''; NOME = '';
+    TOKEN = ''; NOME = ''; PAPEIS = []; APP_INICIADO = false;
     localStorage.removeItem('vera_token');
     localStorage.removeItem('vera_nome');
+    localStorage.removeItem('vera_papeis');
     mostrarLogin();
   }
   function erroEhSessao(err) {
@@ -64,8 +126,10 @@
         btn.disabled = false;
         if (r && r.ok) {
           TOKEN = r.token; NOME = r.nome || '';
+          PAPEIS = r.papeis || [];
           localStorage.setItem('vera_token', TOKEN);
           localStorage.setItem('vera_nome', NOME);
+          localStorage.setItem('vera_papeis', PAPEIS.join(','));
           document.getElementById('login-msg').className = 'msg';
           entrarNoApp();
         } else {
@@ -849,10 +913,104 @@
     }
   }
 
+  // ====================== Oficina ======================
+  function carregarOficinaProducao() {
+    document.getElementById('of-producao-lista').innerHTML = '<span class="carregando">Carregando…</span>';
+    google.script.run
+      .withSuccessHandler(function (lista) { renderOrdens(lista, 'of-producao-lista', 'producao'); })
+      .withFailureHandler(function (err) { erroOficinaLista(err, 'of-producao-lista'); })
+      .listarOrdens(TOKEN, 'em_producao');
+  }
+  function carregarOficinaProntos() {
+    document.getElementById('of-prontos-lista').innerHTML = '<span class="carregando">Carregando…</span>';
+    google.script.run
+      .withSuccessHandler(function (lista) { renderOrdens(lista, 'of-prontos-lista', 'prontos'); })
+      .withFailureHandler(function (err) { erroOficinaLista(err, 'of-prontos-lista'); })
+      .listarOrdens(TOKEN, 'pronto');
+  }
+  function erroOficinaLista(err, elId) {
+    if (erroEhSessao(err)) { sairLocal(); return; }
+    document.getElementById(elId).innerHTML =
+      '<p class="vazio">' + escapar((err && err.message) || 'Não consegui carregar.') + '</p>';
+  }
+  function renderOrdens(lista, elId, modo) {
+    var alvo = document.getElementById(elId);
+    if (!lista || !lista.length) { alvo.innerHTML = '<p class="vazio">Nenhuma ordem aqui.</p>'; return; }
+    alvo.innerHTML = lista.map(function (o) {
+      var p = [];
+      p.push('<div class="of-cab"><strong>' + escapar(o.cliente || '(sem nome)') +
+             '</strong><span class="of-id">' + escapar(o.id) + '</span></div>');
+      if (o.descricao) p.push('<div class="of-desc">' + escapar(o.descricao) + '</div>');
+      var meta = [];
+      if (o.prazo) meta.push('prazo: ' + escapar(o.prazo));
+      if (o.valor) meta.push(brl(o.valor));
+      if (o.telefone) meta.push('📱 ' + escapar(o.telefone));
+      if (meta.length) p.push('<div class="of-meta">' + meta.join(' · ') + '</div>');
+      if (modo === 'prontos') {
+        var av = o.aviso === 'enviado' ? ('✅ cliente avisado ' + escapar(o.data_aviso))
+               : o.aviso === 'falha' ? '⚠️ aviso falhou — avise manualmente'
+               : '⏳ aviso pendente';
+        p.push('<div class="of-aviso">' + av + '</div>');
+        p.push('<button class="of-btn" data-acao="entregue" data-id="' + escapar(o.id) + '">Marcar entregue</button>');
+      } else {
+        p.push('<button class="of-btn" data-acao="pronto" data-id="' + escapar(o.id) + '">Marcar pronto</button>');
+      }
+      return '<div class="of-item">' + p.join('') + '</div>';
+    }).join('');
+  }
+  function onOficinaAcao(ev) {
+    var btn = ev.target.closest('button[data-acao]'); if (!btn) return;
+    var id = btn.dataset.id, acao = btn.dataset.acao;
+    btn.disabled = true;
+    if (acao === 'pronto') {
+      google.script.run
+        .withSuccessHandler(function () { mostrarMsg('Pronto! A Julia vai avisar o cliente. 💬', true, 'of-producao-msg'); carregarOficinaProducao(); })
+        .withFailureHandler(function (err) { btn.disabled = false; if (erroEhSessao(err)) return sairLocal(); mostrarMsg((err && err.message) || 'Deu erro.', false, 'of-producao-msg'); })
+        .marcarPronto({ token: TOKEN, id: id });
+    } else {
+      google.script.run
+        .withSuccessHandler(function () { mostrarMsg('Entregue! Valor lançado no financeiro. ✅', true, 'of-prontos-msg'); carregarOficinaProntos(); })
+        .withFailureHandler(function (err) { btn.disabled = false; if (erroEhSessao(err)) return sairLocal(); mostrarMsg((err && err.message) || 'Deu erro.', false, 'of-prontos-msg'); })
+        .marcarEntregue({ token: TOKEN, id: id });
+    }
+  }
+  document.getElementById('of-producao-lista').addEventListener('click', onOficinaAcao);
+  document.getElementById('of-prontos-lista').addEventListener('click', onOficinaAcao);
+
+  document.getElementById('form-of-nova').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var btn = this.querySelector('button[type=submit]'); btn.disabled = true;
+    var form = this;
+    google.script.run
+      .withSuccessHandler(function (r) {
+        btn.disabled = false;
+        mostrarMsg('Ordem ' + (r && r.id) + ' criada! 🎉', true, 'of-nova-msg');
+        form.reset();
+      })
+      .withFailureHandler(function (err) {
+        btn.disabled = false;
+        if (erroEhSessao(err)) return sairLocal();
+        mostrarMsg((err && err.message) || 'Não consegui criar a ordem.', false, 'of-nova-msg');
+      })
+      .criarOrdem({
+        token: TOKEN,
+        cliente: document.getElementById('of-cliente').value,
+        telefone: document.getElementById('of-telefone').value,
+        descricao: document.getElementById('of-descricao').value,
+        prazo: document.getElementById('of-prazo').value,
+        valor: document.getElementById('of-valor').value
+      });
+  });
+
   // Bootstrap: tem token salvo? confere no servidor; senão, mostra o login.
   if (TOKEN) {
     google.script.run
-      .withSuccessHandler(function (r) { if (r && r.ok) entrarNoApp(); else sairLocal(); })
+      .withSuccessHandler(function (r) {
+        if (r && r.ok) {
+          if (r.papeis) { PAPEIS = r.papeis; localStorage.setItem('vera_papeis', PAPEIS.join(',')); }
+          entrarNoApp();
+        } else { sairLocal(); }
+      })
       .withFailureHandler(function () { sairLocal(); })
       .verificarSessao(TOKEN);
   } else {

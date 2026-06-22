@@ -54,15 +54,24 @@ var ABAS_FIN = {
   SAIDAS: 'Saidas',
   ENTRADAS: 'Entradas',
   RESUMO_MENSAL: 'ResumoMensal',
-  USUARIOS: 'Usuarios'
+  USUARIOS: 'Usuarios',
+  OFICINA: 'Oficina'
 };
 
 var CABECALHOS_FIN = {
   Saidas:       ['id', 'timestamp', 'data', 'descricao', 'valor', 'categoria', 'pagamento', 'obs', 'origem'],
   Entradas:     ['id', 'timestamp', 'data', 'valor', 'forma_pagamento', 'cliente', 'obs', 'origem'],
   ResumoMensal: ['mes', 'ano', 'entrada', 'saida', 'saldo', 'margem'],
-  Usuarios:     ['email', 'senha', 'nome', 'ativo']
+  Usuarios:     ['email', 'senha', 'nome', 'ativo', 'papeis'],
+  // Oficina: ordens de serviço (texto livre). Protegida do seed, como o resto do financeiro.
+  Oficina:      ['ID', 'Data_criacao', 'Cliente', 'Telefone', 'Descricao', 'Prazo', 'Valor',
+                 'Status', 'Aviso', 'Data_aviso', 'Data_pronto', 'Data_entrega',
+                 'Lancado_financeiro', 'Criado_por', 'Finalizado_por', 'Obs']
 };
+
+// Papéis de acesso (login). Acumuláveis (vírgula). 'oficina' só vê a fila de produção;
+// 'atendimento'/'dono' veem tudo. Vazio conta como 'atendimento' (retrocompat).
+var PAPEIS = ['atendimento', 'oficina', 'dono'];
 
 // Enum fixo de categorias de SAÍDA. O que vier fora cai em 'Outros' (com aviso no log).
 var CATEGORIAS_SAIDA = ['Salários', 'Impostos', 'Contas', 'Matéria-Prima',

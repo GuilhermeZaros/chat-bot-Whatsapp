@@ -28,20 +28,40 @@
     <button id="btn-sair" type="button">Sair</button>
   </header>
 
-  <nav id="abas">
-    <button class="ativo" data-aba="dashboard">Início</button>
-    <button data-aba="lanc-gasto">Lançar gasto</button>
-    <button data-aba="lanc-venda">Lançar venda</button>
-    <button data-aba="financeiro">Financeiro</button>
-    <button data-aba="relatorios">Relatórios</button>
-    <button data-aba="simulador">Simulador</button>
-    <button data-aba="venda-quadro">Venda quadro</button>
-    <button data-aba="venda-avulso">Venda avulsa</button>
-    <button data-aba="entrada">Entrada</button>
-    <button data-aba="consulta">Consulta</button>
-    <button data-aba="cadastrar">Cadastrar</button>
-    <button data-aba="editar">Editar</button>
-  </nav>
+  <div id="barras">
+    <nav id="grupos">
+      <button class="ativo" data-grupo="inicio" data-aba="dashboard">Início</button>
+      <button data-grupo="vendas">Vendas</button>
+      <button data-grupo="oficina">Oficina</button>
+      <button data-grupo="estoque">Estoque</button>
+      <button data-grupo="simulador" data-aba="simulador">Simulador</button>
+      <button data-grupo="financeiro">Financeiro</button>
+      <button data-grupo="relatorios" data-aba="relatorios">Relatórios</button>
+    </nav>
+
+    <div id="subnav">
+      <div class="subgrupo" data-grupo="vendas">
+        <button class="ativo" data-aba="venda-quadro">Quadro</button>
+        <button data-aba="venda-avulso">Avulsa</button>
+      </div>
+      <div class="subgrupo" data-grupo="oficina">
+        <button class="ativo" data-aba="of-nova">Nova ordem</button>
+        <button data-aba="of-producao">Em produção</button>
+        <button data-aba="of-prontos">Prontos</button>
+      </div>
+      <div class="subgrupo" data-grupo="estoque">
+        <button class="ativo" data-aba="consulta">Consultar</button>
+        <button data-aba="entrada">Entrada</button>
+        <button data-aba="cadastrar">Cadastrar</button>
+        <button data-aba="editar">Editar</button>
+      </div>
+      <div class="subgrupo" data-grupo="financeiro">
+        <button class="ativo" data-aba="financeiro">Painel</button>
+        <button data-aba="lanc-gasto">Lançar gasto</button>
+        <button data-aba="lanc-venda">Lançar venda</button>
+      </div>
+    </div>
+  </div>
 
   <main>
     <section id="dashboard" class="aba ativa">
@@ -50,6 +70,31 @@
       <div id="estoque-baixo"></div>
       <h2>Últimas movimentações</h2>
       <div id="ultimas"></div>
+    </section>
+
+    <section id="of-nova" class="aba">
+      <p class="dica">Crie uma ordem de serviço pra oficina. A Julia avisa o cliente no WhatsApp quando ficar pronto.</p>
+      <form id="form-of-nova" class="form">
+        <label>Cliente <input id="of-cliente" type="text" required></label>
+        <label>WhatsApp (com DDD) <input id="of-telefone" type="text" inputmode="tel" placeholder="ex: 44 99999-8888"></label>
+        <label>Descrição do quadro <textarea id="of-descricao" rows="3" placeholder="moldura, vidro, medidas, observações…"></textarea></label>
+        <label>Prazo de entrega <input id="of-prazo" type="date"></label>
+        <label>Valor total (R$) <input id="of-valor" type="number" min="0" step="0.01" placeholder="opcional — pode ajustar depois"></label>
+        <div class="acoes"><button type="submit" class="primario">Criar ordem</button></div>
+      </form>
+      <div id="of-nova-msg" class="msg"></div>
+    </section>
+
+    <section id="of-producao" class="aba">
+      <p class="dica">Serviços em produção. Quando terminar, clique em <strong>Marcar pronto</strong> — a Julia avisa o cliente.</p>
+      <div id="of-producao-lista"><span class="carregando">Carregando…</span></div>
+      <div id="of-producao-msg" class="msg"></div>
+    </section>
+
+    <section id="of-prontos" class="aba">
+      <p class="dica">Prontos, aguardando retirada. Ao entregar, clique em <strong>Marcar entregue</strong> (o valor entra no financeiro).</p>
+      <div id="of-prontos-lista"><span class="carregando">Carregando…</span></div>
+      <div id="of-prontos-msg" class="msg"></div>
     </section>
 
     <section id="lanc-gasto" class="aba">

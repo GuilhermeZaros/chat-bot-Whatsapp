@@ -58,7 +58,7 @@ function _somarEstoque(codigo, quantidade) {
 // Todas as linhas desta venda compartilham o mesmo Data_hora (pra contar transações).
 // Objeto em relevo: grava a taxa de pintura como linha própria (categoria chapa).
 function registrarVendaQuadro(args) {
-  _validarSessao(args.token);
+  _validarGestao(args.token);
   return comLock(function () {
     var orc = orcamentoPorCodigos(args); // valida códigos e calcula
     // Saldo e baixa usam o CONSUMO real (moldura: perímetro + cantos 45° + perda de
@@ -104,7 +104,7 @@ function registrarVendaQuadro(args) {
 
 // Venda AVULSA. args: { codigo, quantidade, cliente, observacoes }
 function registrarVendaAvulsa(args) {
-  _validarSessao(args.token);
+  _validarGestao(args.token);
   return comLock(function () {
     var qtd = Number(args.quantidade);
     if (!qtd || qtd <= 0) throw new Error('Quantidade inválida.');
@@ -125,7 +125,7 @@ function registrarVendaAvulsa(args) {
 
 // Entrada de mercadoria. args: { codigo, quantidade, observacoes }
 function registrarEntrada(args) {
-  _validarSessao(args.token);
+  _validarGestao(args.token);
   return comLock(function () {
     var qtd = Number(args.quantidade);
     if (!qtd || qtd <= 0) throw new Error('Quantidade inválida.');

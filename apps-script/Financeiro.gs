@@ -302,7 +302,7 @@ function _idsDaAba(nome) {
 
 // Lança um GASTO (saída). args: { data, descricao, valor, categoria, pagamento, obs }
 function lancarGasto(args) {
-  _validarSessao(args.token);
+  _validarGestao(args.token);
   return comLock(function () {
     garantirAbasFinanceiro();
     var res = _resolverCategoria(args.categoria, CATEGORIAS_SAIDA);
@@ -324,7 +324,7 @@ function lancarGasto(args) {
 
 // Lança uma VENDA (entrada individual). args: { data, valor, forma_pagamento, cliente, obs }
 function lancarVenda(args) {
-  _validarSessao(args.token);
+  _validarGestao(args.token);
   return comLock(function () {
     garantirAbasFinanceiro();
     var valor = _parseValorBR(args.valor);
@@ -342,13 +342,13 @@ function lancarVenda(args) {
 
 // Enums pros dropdowns da interface (fonte única no Config.gs). Só pra quem tem acesso.
 function financeiroConfig(token) {
-  _validarSessao(token);
+  _validarGestao(token);
   return { categorias: CATEGORIAS_SAIDA, formas: FORMAS_PAGAMENTO };
 }
 
 // Lê as abas e devolve o resumo pro dashboard. Chamada SÓ pela interface (não pela API pública).
 function financeiroResumo(token, mes, categoria) {
-  _validarSessao(token);
+  _validarGestao(token);
   garantirAbasFinanceiro();
   return _resumirFinanceiro(
     lerAba(ABAS_FIN.ENTRADAS),
