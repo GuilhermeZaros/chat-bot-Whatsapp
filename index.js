@@ -6,7 +6,13 @@ import { dividirEmMensagens } from './lib/mensagens.js';
 import { classificarMensagem, transcreverAudio, entenderImagem } from './lib/midia.js';
 import { lerHistorico, gravarHistorico, apararHistorico } from './lib/historico.js';
 import { deveEsperarDigitando } from './lib/espera.js';
-import { verificarOficina, buscarPendentesHTTP, confirmarAvisoHTTP } from './lib/oficina.js';
+import { verificarOficina, buscarPendentesHTTP, confirmarAvisoHTTP, normalizarTelefone } from './lib/oficina.js';
+import {
+  detectarDespedida, lerAtendimentos, gravarAtendimentos,
+  verificarAtendimentos, CONFIG_PADRAO
+} from './lib/atendimento.js';
+import { gerarResumo } from './lib/resumo.js';
+import { lerPausados, gravarPausados, aoEditarLabel, aoAssociar, estaPausado } from './lib/pausa.js';
 
 const dormir = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -30,6 +36,17 @@ const MAX_HISTORICO = 40; // limita tokens enviados ao Gemini
 // sejam processadas uma de cada vez, na ordem.
 const filas = new Map();
 
+// Estado do atendimento por contato (última atividade, despedida, fim, resumo enviado).
+// Carregado do disco no boot; salvo a cada mudança. Base do resumo + expiração de 72h.
+const atendimentos = lerAtendimentos();
+const NUMERO_RESUMO = process.env.NUMERO_RESUMO || '44999837101';
+
+// Pausa por etiqueta: conversas etiquetadas no WhatsApp Business em que a Julia não responde.
+let pausa = lerPausados();
+const ETIQUETA_PAUSA = process.env.ETIQUETA_PAUSA || 'Pausar Julia';
+const ETIQUETA_PAUSA_ID = process.env.ETIQUETA_PAUSA_ID || ''; // plano B: casar por id em vez de nome
+const PAUSA_CFG = { nome: ETIQUETA_PAUSA, id: ETIQUETA_PAUSA_ID };
+
 // Buffer de digitação: junta as mensagens que o cliente manda quebradas e só responde quando ele
 // PARA de digitar (usa o status "digitando" do WhatsApp), com um teto pra nunca travar.
 const buffers = new Map();
@@ -44,6 +61,9 @@ const FALLBACK_MIDIA = 'Recebi sua mensagem 😊 mas não consegui abrir o áudi
 // Oficina: a cada ciclo a Julia checa a planilha por quadros marcados como prontos e avisa o cliente.
 let oficinaTimer = null;
 const OFICINA_POLL_MS = 60000;
+
+// Varredura de atendimentos: encerra (resume + avisa o dono) e esquece os de >72h.
+let varreduraTimer = null;
 
 function rodarPollOficina(sock) {
   if (!process.env.OFICINA_TOKEN) return; // sem token configurado: oficina desligada
@@ -60,6 +80,51 @@ function rodarPollOficina(sock) {
   })
     .then((n) => { if (n) console.log(`🏭 oficina: ${n} cliente(s) avisado(s)`); })
     .catch((e) => console.error('🏭 oficina poll erro:', e.message));
+}
+
+function rodarVarreduraAtendimentos(sock) {
+  verificarAtendimentos({
+    listarAtendimentos: () => {
+      // Conversa pausada por etiqueta (humano cuidando) não gera resumo nem expira.
+      const ativos = {};
+      for (const [j, m] of Object.entries(atendimentos)) {
+        if (!estaPausado(pausa, j, PAUSA_CFG)) ativos[j] = m;
+      }
+      return ativos;
+    },
+    lerConversa: (jid) => conversas.get(jid) || [],
+    gerarResumo,
+    onWhatsApp: async (numero) => {
+      const tel = normalizarTelefone(numero);
+      if (!tel) return null;
+      const r = await sock.onWhatsApp(tel);
+      const hit = Array.isArray(r) && r.find((x) => x && x.exists);
+      return hit ? hit.jid : null;
+    },
+    enviar: (jid, texto) => sock.sendMessage(jid, { text: texto }),
+    encerrar: (jid, agora) => {
+      const m = atendimentos[jid];
+      if (!m) return;
+      m.fimAtendimento = agora;
+      m.resumoEnviado = true;
+      gravarAtendimentos(atendimentos);
+    },
+    esquecer: (jid) => {
+      delete atendimentos[jid];
+      conversas.delete(jid);
+      gravarAtendimentos(atendimentos);
+      gravarHistorico(Object.fromEntries(conversas));
+    },
+    agora: Date.now(),
+    cfg: CONFIG_PADRAO,
+    numeroResumo: NUMERO_RESUMO,
+    log: (m) => console.log('📝 ' + m)
+  })
+    .then((r) => {
+      if (r.encerrados || r.esquecidos)
+        console.log(`📝 atendimentos: ${r.encerrados} resumido(s), ${r.esquecidos} esquecido(s)`);
+    })
+    .catch((e) => console.error('📝 varredura erro:', e.message));
 }
 
 // Extrai o texto da mensagem. Texto vem direto; áudio é transcrito; foto é "entendida".
@@ -92,6 +157,13 @@ async function extrairConteudo(sock, msg) {
 }
 
 async function responderCliente(sock, jid, texto) {
+  // Corrida com a etiqueta: se a conversa foi pausada DEPOIS que esta resposta entrou na fila,
+  // não responde (o humano assumiu). Fecha o caso de uma resposta em voo no momento da pausa.
+  if (estaPausado(pausa, jid, PAUSA_CFG)) {
+    console.log(`⏸️  ${jid.split('@')[0]}: pausada durante o processamento — descartando resposta`);
+    return;
+  }
+
   const contexto = {
     enviarFoto: async (url, legenda) => {
       await sock.sendMessage(jid, { image: { url }, caption: legenda });
@@ -186,6 +258,34 @@ async function iniciar() {
     digitando.set(id, p === 'composing' ? Date.now() : 0);
   });
 
+  // Etiquetas do WhatsApp Business: mantém o mapa nome↔id e as associações conversa↔etiqueta,
+  // pra pausar a Julia nas conversas etiquetadas com ETIQUETA_PAUSA.
+  sock.ev.on('labels.edit', (label) => {
+    const novo = aoEditarLabel(pausa, label);
+    if (novo !== pausa) { pausa = novo; gravarPausados(pausa); } // só grava se mudou
+    if (label && label.id) {
+      console.log(`🏷️  etiqueta ${label.id} = "${label.name}"${label.deleted ? ' (apagada)' : ''}`);
+    }
+  });
+  sock.ev.on('labels.association', (ev) => {
+    const a = ev && ev.association;
+    const jid = a && a.chatId;
+    const antes = jid ? estaPausado(pausa, jid, PAUSA_CFG) : false;
+    const novo = aoAssociar(pausa, ev);
+    if (novo !== pausa) { pausa = novo; gravarPausados(pausa); } // ignora no-op/assoc de mensagem
+    if (jid && !a.messageId) {
+      const agora = estaPausado(pausa, jid, PAUSA_CFG);
+      if (agora && !antes) {
+        // Ao pausar, descarta mensagem em voo daquele chat (não responde atrasado ao religar).
+        const buf = buffers.get(jid);
+        if (buf) { clearTimeout(buf.timer); buffers.delete(jid); }
+        console.log(`⏸️  ${jid.split('@')[0]}: pausada por etiqueta`);
+      } else if (!agora && antes) {
+        console.log(`▶️  ${jid.split('@')[0]}: etiqueta removida — Julia volta a responder`);
+      }
+    }
+  });
+
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
 
@@ -204,6 +304,11 @@ async function iniciar() {
         oficinaTimer = setInterval(() => rodarPollOficina(sock), OFICINA_POLL_MS);
         console.log('🏭 Aviso automático da oficina ligado (checando a cada 60s).');
       }
+      // Varredura de atendimentos (resumo + expiração) ligada a ESTE sock.
+      if (varreduraTimer) clearInterval(varreduraTimer);
+      rodarVarreduraAtendimentos(sock); // uma vez já no boot
+      varreduraTimer = setInterval(() => rodarVarreduraAtendimentos(sock), CONFIG_PADRAO.VARREDURA_MS);
+      console.log('📝 Resumo de atendimento + expiração de 72h ligados (checando a cada 5 min).');
     }
 
     if (connection === 'close') {
@@ -244,10 +349,27 @@ async function iniciar() {
         continue;
       }
 
+      // Conversa pausada por etiqueta: ignora por completo (não bufferiza, não enfileira, não
+      // guarda no histórico, não toca no estado de atendimento). Religar não responde nada antigo.
+      if (estaPausado(pausa, jid, PAUSA_CFG)) {
+        console.log(`⏸️  ${jid.split('@')[0]}: conversa pausada (etiqueta) — ignorando`);
+        continue;
+      }
+
       const texto = await extrairConteudo(sock, msg);
       if (!texto) continue; // figurinha/vídeo/documento — ignorados por enquanto
 
       console.log(`📩 ${jid.split('@')[0]}: ${texto}`);
+
+      // Atualiza o estado do atendimento: marca atividade/despedida; se o cliente voltou
+      // depois de um ciclo já resumido, reabre um novo ciclo (zera fim/resumoEnviado).
+      const meta = atendimentos[jid] ||
+        { ultimaAtividade: 0, despedida: false, fimAtendimento: null, resumoEnviado: false };
+      meta.ultimaAtividade = Date.now();
+      meta.despedida = detectarDespedida(texto);
+      if (meta.resumoEnviado) { meta.resumoEnviado = false; meta.fimAtendimento = null; }
+      atendimentos[jid] = meta;
+      gravarAtendimentos(atendimentos);
 
       if (!buffers.has(jid)) {
         buffers.set(jid, { textos: [], timer: null });
