@@ -10,6 +10,7 @@
     if (id === 'financeiro') carregarFinanceiro();
     if (id === 'of-producao') carregarOficinaProducao();
     if (id === 'of-prontos') carregarOficinaProntos();
+    if (id === 'of-historico') carregarOficinaHistorico();
   }
 
   function selecionarSub(grupo, aba) {
@@ -914,6 +915,12 @@
   }
 
   // ====================== Oficina ======================
+  var ULTIMA_OFICINA = { producao: [], prontos: [] }; // última lista carregada, p/ prefill da edição
+  function recarregarOficina(modo) { if (modo === 'prontos') carregarOficinaProntos(); else carregarOficinaProducao(); }
+  function ofMsgId(modo) { return modo === 'prontos' ? 'of-prontos-msg' : 'of-producao-msg'; }
+  function prazoParaISO(s) { var m = String(s || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/); return m ? (m[3] + '-' + m[2] + '-' + m[1]) : ''; }
+  function escAttr(s) { return escapar(s).replace(/"/g, '&quot;'); }
+
   function carregarOficinaProducao() {
     document.getElementById('of-producao-lista').innerHTML = '<span class="carregando">Carregando…</span>';
     google.script.run
@@ -934,8 +941,10 @@
       '<p class="vazio">' + escapar((err && err.message) || 'Não consegui carregar.') + '</p>';
   }
   function renderOrdens(lista, elId, modo) {
+    ULTIMA_OFICINA[modo] = lista || [];
     var alvo = document.getElementById(elId);
     if (!lista || !lista.length) { alvo.innerHTML = '<p class="vazio">Nenhuma ordem aqui.</p>'; return; }
+    var podeEditar = temGestaoJS(PAPEIS);
     alvo.innerHTML = lista.map(function (o) {
       var p = [];
       p.push('<div class="of-cab"><strong>' + escapar(o.cliente || '(sem nome)') +
@@ -951,23 +960,59 @@
                : o.aviso === 'falha' ? '⚠️ aviso falhou — avise manualmente'
                : '⏳ aviso pendente';
         p.push('<div class="of-aviso">' + av + '</div>');
-        p.push('<button class="of-btn" data-acao="entregue" data-id="' + escapar(o.id) + '">Marcar entregue</button>');
-      } else {
-        p.push('<button class="of-btn" data-acao="pronto" data-id="' + escapar(o.id) + '">Marcar pronto</button>');
       }
+      var acoes = [];
+      if (podeEditar) acoes.push('<button class="of-btn of-btn-sec" data-acao="editar" data-id="' + escapar(o.id) + '">Editar</button>');
+      if (modo === 'prontos') acoes.push('<button class="of-btn" data-acao="entregue" data-id="' + escapar(o.id) + '">Marcar entregue</button>');
+      else acoes.push('<button class="of-btn" data-acao="pronto" data-id="' + escapar(o.id) + '">Marcar pronto</button>');
+      p.push('<div class="of-acoes">' + acoes.join('') + '</div>');
       return '<div class="of-item">' + p.join('') + '</div>';
     }).join('');
+  }
+  // Form de edição renderizado DENTRO do card (prefill via ULTIMA_OFICINA).
+  function formEdicaoOrdem(o) {
+    return '<div class="of-cab"><strong>Editando</strong><span class="of-id">' + escapar(o.id) + '</span></div>' +
+      '<label class="of-ed-l">Cliente<input class="of-ed" data-k="cliente" value="' + escAttr(o.cliente) + '"></label>' +
+      '<label class="of-ed-l">WhatsApp (com DDD)<input class="of-ed" data-k="telefone" value="' + escAttr(o.telefone) + '"></label>' +
+      '<label class="of-ed-l">Descrição<textarea class="of-ed" data-k="descricao" rows="3">' + escapar(o.descricao) + '</textarea></label>' +
+      '<label class="of-ed-l">Prazo<input class="of-ed" data-k="prazo" type="date" value="' + prazoParaISO(o.prazo) + '"></label>' +
+      '<label class="of-ed-l">Valor (R$)<input class="of-ed" data-k="valor" type="number" min="0" step="0.01" value="' + (Number(o.valor) || 0) + '"></label>' +
+      '<div class="of-acoes">' +
+        '<button class="of-btn" data-acao="salvar-edicao" data-id="' + escapar(o.id) + '">Salvar</button>' +
+        '<button class="of-btn of-btn-sec" data-acao="cancelar-edicao" data-id="' + escapar(o.id) + '">Cancelar</button>' +
+      '</div>';
   }
   function onOficinaAcao(ev) {
     var btn = ev.target.closest('button[data-acao]'); if (!btn) return;
     var id = btn.dataset.id, acao = btn.dataset.acao;
+    var modo = ev.currentTarget.id === 'of-prontos-lista' ? 'prontos' : 'producao';
+    var msgId = ofMsgId(modo);
+
+    if (acao === 'editar') {
+      var o = (ULTIMA_OFICINA[modo] || []).filter(function (x) { return x.id === id; })[0];
+      if (o) btn.closest('.of-item').innerHTML = formEdicaoOrdem(o);
+      return;
+    }
+    if (acao === 'cancelar-edicao') { recarregarOficina(modo); return; }
+    if (acao === 'salvar-edicao') {
+      var card = btn.closest('.of-item');
+      var dados = { token: TOKEN, id: id };
+      card.querySelectorAll('.of-ed').forEach(function (el) { dados[el.dataset.k] = el.value; });
+      btn.disabled = true;
+      google.script.run
+        .withSuccessHandler(function () { mostrarMsg('Ordem ' + id + ' atualizada! ✏️', true, msgId); recarregarOficina(modo); })
+        .withFailureHandler(function (err) { btn.disabled = false; if (erroEhSessao(err)) return sairLocal(); mostrarMsg((err && err.message) || 'Erro ao salvar.', false, msgId); })
+        .editarOrdem(dados);
+      return;
+    }
+
     btn.disabled = true;
     if (acao === 'pronto') {
       google.script.run
         .withSuccessHandler(function () { mostrarMsg('Pronto! A Julia vai avisar o cliente. 💬', true, 'of-producao-msg'); carregarOficinaProducao(); })
         .withFailureHandler(function (err) { btn.disabled = false; if (erroEhSessao(err)) return sairLocal(); mostrarMsg((err && err.message) || 'Deu erro.', false, 'of-producao-msg'); })
         .marcarPronto({ token: TOKEN, id: id });
-    } else {
+    } else if (acao === 'entregue') {
       google.script.run
         .withSuccessHandler(function () { mostrarMsg('Entregue! Valor lançado no financeiro. ✅', true, 'of-prontos-msg'); carregarOficinaProntos(); })
         .withFailureHandler(function (err) { btn.disabled = false; if (erroEhSessao(err)) return sairLocal(); mostrarMsg((err && err.message) || 'Deu erro.', false, 'of-prontos-msg'); })
@@ -976,6 +1021,76 @@
   }
   document.getElementById('of-producao-lista').addEventListener('click', onOficinaAcao);
   document.getElementById('of-prontos-lista').addEventListener('click', onOficinaAcao);
+
+  // ---- Histórico de serviços (filtro mês/ano, por data de criação) ----
+  var HISTORICO_OFICINA = [];
+  var MESES_OF = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+  function mesAnoDe(o) {
+    var m = String(o.data_criacao || '').match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    return m ? { mes: parseInt(m[2], 10), ano: parseInt(m[3], 10) } : null;
+  }
+  function badgeStatus(s) {
+    var rotulo = s === 'entregue' ? 'Entregue' : s === 'pronto' ? 'Pronto' : 'Em produção';
+    return '<span class="of-badge of-badge-' + (s || 'em_producao') + '">' + rotulo + '</span>';
+  }
+  function carregarOficinaHistorico() {
+    document.getElementById('of-hist-lista').innerHTML = '<span class="carregando">Carregando…</span>';
+    google.script.run
+      .withSuccessHandler(function (lista) { HISTORICO_OFICINA = lista || []; prepararFiltrosHistorico(); renderHistorico(); })
+      .withFailureHandler(function (err) { erroOficinaLista(err, 'of-hist-lista'); })
+      .listarOrdens(TOKEN, '');
+  }
+  function prepararFiltrosHistorico() {
+    var selMes = document.getElementById('of-hist-mes');
+    if (!selMes.options.length) {
+      var om = ['<option value="">Todos os meses</option>'];
+      for (var i = 1; i <= 12; i++) om.push('<option value="' + i + '">' + MESES_OF[i - 1] + '</option>');
+      selMes.innerHTML = om.join('');
+    }
+    var selAno = document.getElementById('of-hist-ano');
+    var anos = {};
+    HISTORICO_OFICINA.forEach(function (o) { var ma = mesAnoDe(o); if (ma) anos[ma.ano] = true; });
+    var lista = Object.keys(anos).sort(function (a, b) { return b - a; });
+    var atual = selAno.value;
+    var oa = ['<option value="">Todos os anos</option>'];
+    lista.forEach(function (a) { oa.push('<option value="' + a + '">' + a + '</option>'); });
+    selAno.innerHTML = oa.join('');
+    if (atual) selAno.value = atual;
+  }
+  function renderHistorico() {
+    var mes = document.getElementById('of-hist-mes').value;
+    var ano = document.getElementById('of-hist-ano').value;
+    var filtradas = HISTORICO_OFICINA.filter(function (o) {
+      var ma = mesAnoDe(o);
+      if (!ma) return !mes && !ano; // sem data: só aparece em "todos"
+      if (mes && ma.mes !== parseInt(mes, 10)) return false;
+      if (ano && ma.ano !== parseInt(ano, 10)) return false;
+      return true;
+    });
+    var total = filtradas.reduce(function (s, o) { return s + (Number(o.valor) || 0); }, 0);
+    document.getElementById('of-hist-resumo').innerHTML =
+      filtradas.length ? ('<strong>' + filtradas.length + '</strong> serviço(s) · total ' + brl(total)) : '';
+    var alvo = document.getElementById('of-hist-lista');
+    if (!filtradas.length) { alvo.innerHTML = '<p class="vazio">Nenhum serviço nesse período.</p>'; return; }
+    alvo.innerHTML = filtradas.map(function (o) {
+      var p = [];
+      p.push('<div class="of-cab"><strong>' + escapar(o.cliente || '(sem nome)') +
+             '</strong><span class="of-id">' + escapar(o.id) + '</span></div>');
+      p.push('<div class="of-badges">' + badgeStatus(o.status) + '</div>');
+      if (o.descricao) p.push('<div class="of-desc">' + escapar(o.descricao) + '</div>');
+      var meta = [];
+      if (o.valor) meta.push(brl(o.valor));
+      if (o.data_criacao) meta.push('criado: ' + escapar(o.data_criacao));
+      if (o.data_entrega) meta.push('entregue: ' + escapar(o.data_entrega));
+      if (o.telefone) meta.push('📱 ' + escapar(o.telefone));
+      if (meta.length) p.push('<div class="of-meta">' + meta.join(' · ') + '</div>');
+      return '<div class="of-item">' + p.join('') + '</div>';
+    }).join('');
+  }
+  document.getElementById('of-hist-mes').addEventListener('change', renderHistorico);
+  document.getElementById('of-hist-ano').addEventListener('change', renderHistorico);
 
   document.getElementById('form-of-nova').addEventListener('submit', function (ev) {
     ev.preventDefault();

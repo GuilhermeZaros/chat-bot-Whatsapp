@@ -48,6 +48,7 @@
         <button class="ativo" data-aba="of-nova">Nova ordem</button>
         <button data-aba="of-producao">Em produção</button>
         <button data-aba="of-prontos">Prontos</button>
+        <button data-aba="of-historico">Histórico</button>
       </div>
       <div class="subgrupo" data-grupo="estoque">
         <button class="ativo" data-aba="consulta">Consultar</button>
@@ -95,6 +96,16 @@
       <p class="dica">Prontos, aguardando retirada. Ao entregar, clique em <strong>Marcar entregue</strong> (o valor entra no financeiro).</p>
       <div id="of-prontos-lista"><span class="carregando">Carregando…</span></div>
       <div id="of-prontos-msg" class="msg"></div>
+    </section>
+
+    <section id="of-historico" class="aba">
+      <p class="dica">Todos os serviços já registrados. Filtre por mês e ano.</p>
+      <div class="fin-filtros">
+        <label>Mês <select id="of-hist-mes"></select></label>
+        <label>Ano <select id="of-hist-ano"></select></label>
+      </div>
+      <div id="of-hist-resumo" class="of-hist-resumo"></div>
+      <div id="of-hist-lista"><span class="carregando">Carregando…</span></div>
     </section>
 
     <section id="lanc-gasto" class="aba">

@@ -163,6 +163,26 @@ function marcarPronto(args) {
   });
 }
 
+// Edita os detalhes (cliente/telefone/descrição/prazo/valor). Exige atendimento/dono.
+// NÃO mexe em status/aviso/datas/financeiro. args: { token, id, cliente, telefone, descricao, prazo, valor }
+function editarOrdem(args) {
+  _validarGestao(args.token);
+  return comLock(function () {
+    var o = _acharOrdem(args.id);
+    if (!o) throw new Error('Ordem não encontrada: ' + args.id);
+    var cliente = String(args.cliente || '').trim();
+    if (!cliente) throw new Error('Informe o nome do cliente.');
+    var valor = _parseValorBR(args.valor);
+    if (!(valor >= 0)) valor = 0;
+    atualizarCelula(ABAS_FIN.OFICINA, o._linha, 'Cliente', cliente);
+    atualizarCelula(ABAS_FIN.OFICINA, o._linha, 'Telefone', String(args.telefone || '').trim());
+    atualizarCelula(ABAS_FIN.OFICINA, o._linha, 'Descricao', String(args.descricao || '').trim());
+    atualizarCelula(ABAS_FIN.OFICINA, o._linha, 'Prazo', _prazoStr(args.prazo));
+    atualizarCelula(ABAS_FIN.OFICINA, o._linha, 'Valor', valor);
+    return { ok: true };
+  });
+}
+
 // Cliente retira. args: { token, id }. Exige atendimento/dono. Lança o valor no financeiro (1x).
 function marcarEntregue(args) {
   _validarGestao(args.token);
